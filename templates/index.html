@@ -1,0 +1,22 @@
+<html>
+  <head>
+    <title>Video Streaming Demonstration</title>
+  </head>
+  <body>
+    <h1>Video Streaming Demonstration</h1>
+
+    <form action="/stop/" method="post">
+      <button name="stopButton" type="submit">Stop Recording</button>
+    </form>
+
+    <form action="/start/" method="post">
+      <button name="startButton" type="submit">Start Recording</button>
+    </form>
+
+    <form action="/download_last/" method="post">
+      <button name="downloadLast" type="submit">Download last recording</button>
+    </form>
+
+    <img id="bg" src="{{ url_for('video_feed') }}">
+  </body>
+</html>

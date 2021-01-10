@@ -1,0 +1,4 @@
+/detectors/yolo_detector/weights/*
+/detectors/mask_rcnn/weights/*
+**/__pycache__
+**.ipynb
