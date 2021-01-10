@@ -5,6 +5,11 @@
   <body>
     <h1>Video Streaming Demonstration</h1>
 
+    <form action="/connect_to_ricoh/" method="post">
+      <button name="cameraWifi" type="submit">Connect to camera Wifi</button>
+    </form>
+
+
     <form action="/stop/" method="post">
       <button name="stopButton" type="submit">Stop Recording</button>
     </form>
@@ -12,6 +17,25 @@
     <form action="/start/" method="post">
       <button name="startButton" type="submit">Start Recording</button>
     </form>
+
+    Realsense: {{realsense_device_status}}
+    <form action="/realsense_off/" method="post">
+      <button name="realsenseOff" type="submit">Realsense off</button>
+    </form>
+
+    <form action="/realsense_on/" method="post">
+      <button name="realsenseOn" type="submit">Realsense on</button>
+    </form>
+
+    <form action="/disable_detector/" method="post">
+      <button name="detectorOff" type="submit">Detector off</button>
+    </form>
+
+    <form action="/enable_detector/" method="post">
+      <button name="detectorOn" type="submit">Detector on</button>
+    </form>
+
+    
 
     <form action="/download_last/" method="post">
       <button name="downloadLast" type="submit">Download last recording</button>
