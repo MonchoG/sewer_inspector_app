@@ -13,16 +13,16 @@ import time
 from camera import VideoCamera
 
 # Uncomment on nano to import GPIO modules
-#import RPi.GPIO as GPIO
+import RPi.GPIO as GPIO
 
 # Pin Definitions
 output_pin = 23  # BCM pin 23, BOARD pin 16
 output_pin2 = 27  # BCM 27, board 13
 output_pin3 = 18  # BCN 18, board 12
 # Uncomment on nano to init gpio pins...
-# GPIO.setmode(GPIO.BCM)  # BCM pin-numbering scheme from Raspberry Pi
+GPIO.setmode(GPIO.BCM)  # BCM pin-numbering scheme from Raspberry Pi
 # # set pin as an output pin with optional initial state of LOW
-# GPIO.setup(output_pin, GPIO.OUT, initial=GPIO.LOW)
+GPIO.setup(output_pin, GPIO.OUT, initial=GPIO.LOW)
 # GPIO.setup(output_pin2, GPIO.OUT, initial=GPIO.LOW)
 # GPIO.setup(output_pin3, GPIO.OUT, initial=GPIO.LOW)
 # curr_value = GPIO.LOW
@@ -71,11 +71,9 @@ def index():
 @app.route("/illumination_on/", methods=['POST'])
 def illumination_on():
     # uncomment on nano
-    # global output_pin , curr_value
-    # curr_value = GPIO.HIGH
-    # GPIO.output(output_pin, curr_value)
-    global illumination
-
+    global output_pin , curr_value, illumination
+    curr_value = GPIO.HIGH
+    GPIO.output(output_pin, curr_value)
     illumination = "ON"
     return index()
 
@@ -85,10 +83,10 @@ def illumination_on():
 @app.route("/illumination_off/", methods=['POST'])
 def illumination_off():
     # uncomment on nano
-    # global output_pin , curr_value
-    # curr_value = GPIO.LOW
-    # GPIO.output(output_pin, curr_value)
-    global illumination
+    global output_pin , curr_value, illumination
+    curr_value = GPIO.LOW
+    GPIO.output(output_pin, curr_value)
+    
     illumination = "OFF"
     return index()
 
@@ -229,48 +227,32 @@ def connect_ricoh():
 
 
 # # Path to obtain frames from depth camera device
-# @app.route('/video_feed')
-# def video_feed():
-#     return Response(gen(),
-#                     mimetype='multipart/x-mixed-replace; boundary=frame')
+@app.route('/video_feed')
+def video_feed():
+     return Response(gen(),
+                     mimetype='multipart/x-mixed-replace; boundary=frame')
 
 
 # # Returns video stream from depth camera device
 # # Runs detection if enabled
-# def gen():
-#     global realsense_enabled, camera, enable_detection, detector
-#     if realsense_enabled:
-#         while realsense_enabled:
-#             if camera:
-#                 color_image, depth_image, depth_frame, acceleration_x, acceleration_y, acceleration_z, gyroscope_x, gyroscope_y, gyroscope_z = camera.run()
+def gen():
+     global realsense_enabled, camera, enable_detection, detector
+     if realsense_enabled:
+         while realsense_enabled:
+             if camera:
+                 color_image, depth_image, depth_frame, acceleration_x, acceleration_y, acceleration_z, gyroscope_x, gyroscope_y, gyroscope_z = camera.run()
 
-#                 if enable_detection:
-#                     detection = detector.detect(color_image)
-#                     color_image = detector.draw_results(
-#                         detection, color_image, depth_frame, camera.depth_scale)
+                 if enable_detection:
+                     detection = detector.detect(color_image)
+                     color_image = detector.draw_results(
+                         detection, color_image, depth_frame, camera.depth_scale)
 
 #                 # encode and return
-#                 ret, jpg = cv2.imencode('.jpg', color_image)
-#                 yield (b'--frame\r\n'
-#                        b'Content-Type: image/jpg\r\n\r\n' + jpg.tobytes() + b'\r\n\r\n')
+                 ret, jpg = cv2.imencode('.jpg', color_image)
+                 yield (b'--frame\r\n'
+                        b'Content-Type: image/jpg\r\n\r\n' + jpg.tobytes() + b'\r\n\r\n')
 #                 #cv2.imwrite("{}.jpg".format(frame_count), color_image)
 
 
-def gen(camera):
-    while True:
-        frame = camera.get_frame()
-        detection = detector.detect(frame)
-        color_image = detector.draw_results_no_depth(detection, frame)
-        ret, jpeg = cv2.imencode('.JPEG', color_image)
-        yield (b'--frame\r\n'
-               b'Content-Type: image/jpeg\r\n\r\n' + jpeg.tobytes() + b'\r\n\r\n')
-
-
-@app.route('/video_feed')
-def video_feed():
-    return Response(gen(VideoCamera()),
-                    mimetype='multipart/x-mixed-replace; boundary=frame')
-
-
 if __name__ == '__main__':
-    app.run(host='127.0.0.1', debug=True)
+    app.run(host='192.168.137.165', port=5002, debug=True)
