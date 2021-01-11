@@ -12,21 +12,28 @@ import time
 
 from camera import VideoCamera
 
+import platform
 # Uncomment on nano to import GPIO modules
-import RPi.GPIO as GPIO
 
-# Pin Definitions
-output_pin = 23  # BCM pin 23, BOARD pin 16
-output_pin2 = 27  # BCM 27, board 13
-output_pin3 = 18  # BCN 18, board 12
-# Uncomment on nano to init gpio pins...
-GPIO.setmode(GPIO.BCM)  # BCM pin-numbering scheme from Raspberry Pi
-# # set pin as an output pin with optional initial state of LOW
-GPIO.setup(output_pin, GPIO.OUT, initial=GPIO.LOW)
-# GPIO.setup(output_pin2, GPIO.OUT, initial=GPIO.LOW)
-# GPIO.setup(output_pin3, GPIO.OUT, initial=GPIO.LOW)
-# curr_value = GPIO.LOW
-# Ilumination
+use_gpio = False
+if str(platform.platform()).__contains__("Windows"):
+    print("On windows, not importing GPIO")
+    use_gpio = False
+else:
+    import RPi.GPIO as GPIO
+    use_gpio = True
+
+    # Pin Definitions
+    output_pin = 23  # BCM pin 23, BOARD pin 16
+    output_pin2 = 27  # BCM 27, board 13
+    output_pin3 = 18  # BCN 18, board 12
+    # Uncomment on nano to init gpio pins...
+    GPIO.setmode(GPIO.BCM)  # BCM pin-numbering scheme from Raspberry Pi
+    # # set pin as an output pin with optional initial state of LOW
+    GPIO.setup(output_pin, GPIO.OUT, initial=GPIO.LOW)
+    # GPIO.setup(output_pin2, GPIO.OUT, initial=GPIO.LOW)
+    # GPIO.setup(output_pin3, GPIO.OUT, initial=GPIO.LOW)
+    # Ilumination
 illumination_on = False
 
 illumination = "OFF"
@@ -60,7 +67,7 @@ camera = None
 ricoh = None
 
 
-@app.route('/')
+@ app.route('/')
 def index():
     global realsense_enabled
     return render_template('index.html', cameraName=cameraName, cameraPassword=cameraPassword, illumination_status=illumination, realsense_device_status=realsense_enabled, detector_enabled=enable_detection)
@@ -68,31 +75,33 @@ def index():
 
 # Turn illumination on
 # TODO cleanup
-@app.route("/illumination_on/", methods=['POST'])
+@ app.route("/illumination_on/", methods=['POST'])
 def illumination_on():
     # uncomment on nano
-    global output_pin , curr_value, illumination
-    curr_value = GPIO.HIGH
-    GPIO.output(output_pin, curr_value)
+    global output_pin, curr_value, illumination
+    if use_gpio:
+        curr_value = GPIO.HIGH
+        GPIO.output(output_pin, curr_value)
     illumination = "ON"
     return index()
 
 
 # Turn illumination off
 # TODO cleanup
-@app.route("/illumination_off/", methods=['POST'])
+@ app.route("/illumination_off/", methods=['POST'])
 def illumination_off():
     # uncomment on nano
-    global output_pin , curr_value, illumination
-    curr_value = GPIO.LOW
-    GPIO.output(output_pin, curr_value)
-    
+    global output_pin, curr_value, illumination
+    if use_gpio:
+        curr_value = GPIO.LOW
+        GPIO.output(output_pin, curr_value)
+
     illumination = "OFF"
     return index()
 
 
 # Turn depth cam on
-@app.route("/realsense_on/", methods=['POST'])
+@ app.route("/realsense_on/", methods=['POST'])
 def start_realsense_camera():
     global realsense_enabled, camera
     print(realsense_enabled)
@@ -106,7 +115,7 @@ def start_realsense_camera():
 # Turn depth cam off
 
 
-@app.route("/realsense_off/", methods=['POST'])
+@ app.route("/realsense_off/", methods=['POST'])
 def stop_realsense_camera():
     global realsense_enabled, camera
     if realsense_enabled:
@@ -119,7 +128,7 @@ def stop_realsense_camera():
 # Load yolo detector
 
 
-@app.route("/enable_detector_yolo/", methods=['POST'])
+@ app.route("/enable_detector_yolo/", methods=['POST'])
 def enable_detector_yolo():
     global enable_detection, detector
     if not enable_detection:
@@ -131,7 +140,7 @@ def enable_detector_yolo():
     return index()
 
 
-@app.route("/enable_detector_mrcnn/", methods=['POST'])
+@ app.route("/enable_detector_mrcnn/", methods=['POST'])
 def enable_detector_mrcnn():
     global enable_detection, detector
 
@@ -145,7 +154,7 @@ def enable_detector_mrcnn():
 # Disable detector
 
 
-@app.route("/disable_detector/", methods=['POST'])
+@ app.route("/disable_detector/", methods=['POST'])
 def disable_detector():
     global enable_detection
 
@@ -162,7 +171,7 @@ def disable_detector():
 # Connects to device wifi # TODO check how this works...
 # Sends the stop capture command
 # Requires to have ricoh object set
-@app.route("/stop/", methods=['POST'])
+@ app.route("/stop/", methods=['POST'])
 def stop_capture():
     global ricoh
     os.system(
@@ -175,7 +184,7 @@ def stop_capture():
 # Continuous images/ or video depending on device mode
 
 
-@app.route("/start/", methods=['POST'])
+@ app.route("/start/", methods=['POST'])
 def start_capture():
     response_start = ricoh.start_capture()
     return render_template('index.html')
@@ -183,13 +192,13 @@ def start_capture():
 # Downloads the last recorded file from ricoh camera device
 
 
-@app.route("/download_last/", methods=['POST'])
+@ app.route("/download_last/", methods=['POST'])
 def download_last():
     response_start = ricoh.download_last()
     return render_template('index.html')
 
 
-@app.route("/post_credentials/", methods=['POST'])
+@ app.route("/post_credentials/", methods=['POST'])
 def post_credentials():
     global cameraName, cameraPassword
 
@@ -203,7 +212,7 @@ def post_credentials():
 # Inits ricoh object
 
 
-@app.route("/connect_to_ricoh/", methods=['POST'])
+@ app.route("/connect_to_ricoh/", methods=['POST'])
 def connect_ricoh():
     try:
         global ricoh
@@ -227,32 +236,32 @@ def connect_ricoh():
 
 
 # # Path to obtain frames from depth camera device
-@app.route('/video_feed')
+@ app.route('/video_feed')
 def video_feed():
-     return Response(gen(),
-                     mimetype='multipart/x-mixed-replace; boundary=frame')
+    return Response(gen(),
+                    mimetype='multipart/x-mixed-replace; boundary=frame')
 
 
 # # Returns video stream from depth camera device
 # # Runs detection if enabled
 def gen():
-     global realsense_enabled, camera, enable_detection, detector
-     if realsense_enabled:
-         while realsense_enabled:
-             if camera:
-                 color_image, depth_image, depth_frame, acceleration_x, acceleration_y, acceleration_z, gyroscope_x, gyroscope_y, gyroscope_z = camera.run()
+    global realsense_enabled, camera, enable_detection, detector
+    if realsense_enabled:
+        while realsense_enabled:
+            if camera:
+                color_image, depth_image, depth_frame, acceleration_x, acceleration_y, acceleration_z, gyroscope_x, gyroscope_y, gyroscope_z = camera.run()
 
-                 if enable_detection:
-                     detection = detector.detect(color_image)
-                     color_image = detector.draw_results(
-                         detection, color_image, depth_frame, camera.depth_scale)
+                if enable_detection:
+                    detection = detector.detect(color_image)
+                    color_image = detector.draw_results(
+                        detection, color_image, depth_frame, camera.depth_scale)
 
 #                 # encode and return
-                 ret, jpg = cv2.imencode('.jpg', color_image)
-                 yield (b'--frame\r\n'
-                        b'Content-Type: image/jpg\r\n\r\n' + jpg.tobytes() + b'\r\n\r\n')
+                ret, jpg = cv2.imencode('.jpg', color_image)
+                yield (b'--frame\r\n'
+                       b'Content-Type: image/jpg\r\n\r\n' + jpg.tobytes() + b'\r\n\r\n')
 #                 #cv2.imwrite("{}.jpg".format(frame_count), color_image)
 
 
 if __name__ == '__main__':
-    app.run(host='192.168.137.165', port=5002, debug=True)
+    app.run(host='127.0.0.1', port=5002, debug=True)
