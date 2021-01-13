@@ -231,7 +231,7 @@ def new_report():
     inspection_report.write_inspection_file(date.today().strftime("%d_%m_%Y"))
     # Clear report variables..
     inspection_report = None
-    detections_results = None
+    detections_results = []
 
     return render_camera_view()
 
@@ -280,9 +280,11 @@ def stop_capture():
 # Starts capture on ricoh device
 # Continuous images/ or video depending on device mode
 
+
 @ app.route("/start/", methods=['POST'])
 def start_capture():
-    global start_time, elapsed_time, ricoh
+    global start_time, elapsed_time, ricoh, detections_results
+    detections_results = []
     elapsed_time = None
     start_time = time.time()
     if ricoh:
@@ -352,6 +354,10 @@ def video_feed():
 
 # Endpoint to optain detection results...
 # Returns list with JSON
+
+# Endpoint which serves the detections data in json format
+# Change len(data) == X to increase amount of returned items
+# the response contains the latest detection at the first index
 
 
 @ app.route('/data', methods=["GET", "POST"])
