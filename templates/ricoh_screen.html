@@ -1,0 +1,144 @@
+<html>
+
+<head>
+    <title>Sewer inspector application</title>
+    <style>
+        #general_table_style {
+            font-family: Arial, Helvetica, sans-serif;
+            border-collapse: collapse;
+            width: 100%;
+        }
+
+        #general_table_style td,
+        #general_table_style th {
+            border: 1px solid #ddd;
+            padding: 8px;
+        }
+
+        #general_table_style tr:nth-child(even) {
+            background-color: #f2f2f2;
+        }
+
+        #general_table_style tr:hover {
+            background-color: #ddd;
+        }
+
+        #general_table_style th {
+            padding-top: 12px;
+            padding-bottom: 12px;
+            text-align: left;
+            background-color: darkcyan;
+            color: white;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Sewer inspector application</h1>
+
+    <form action="/" method="GET">
+        <button name="backButton" type="submit">Back</button>
+    </form>
+<!-- Connection table -->
+    <table id="general_table_style" name="connectionTable">
+        <tbody>
+            <caption><strong>Network status</strong></caption>
+            <tr>
+                <th>
+                    <strong>Current connections</strong>
+                </th>
+                <th>
+                    <strong> wifi interface :</strong> {{current_network}}
+                </th>
+                <th>
+                    <strong> ethernet interface: {{current_network}}
+                </th>
+            </tr>
+
+<!-- Post device credentials -->
+            <tr>
+                <form action="/post_credentials/" method="post">
+                    <td>camera name </td>
+                    <td>password</td>
+                    <td>
+                        <button name="submitCameraCredentials" type="submit">Submit cameraCredentials</button>
+                    </td>
+            </tr>
+            <tr>
+                <td><input name="cameraName" type="text" /> </td>
+                <td><input name="cameraPassword" type="text" /></td>
+                <td>Name: {{cameraName}} | Password: {{cameraPassword}}</td>
+                </form>
+            </tr>
+
+            <tr>
+                <td></td>
+                <td>
+                    <form action="/connect_to_ricoh/" method="post">
+                        <button name="cameraWifi" type="submit">Connect to camera Wifi</button>
+                    </form>
+                </td>
+                <td></td>
+
+            </tr>
+
+        </tbody>
+    </table>
+
+    <br><br>
+
+
+    <table id="general_table_style" name="ricohDeviceTable">
+        <tbody>
+            <caption><strong>Ricoh device control</strong></caption>
+
+
+            <tr>
+                <td>Ricoh device status
+                </td>
+                <td>
+                    {{ricoh_status}}
+                </td>
+                <td> <br> <button name="updateStatus" type="submit">Update status</button>
+                </td>
+            </tr>
+
+            <tr>
+
+                <th></th>
+                <th><strong>Recording control</strong></th>
+                <th></th>
+            </tr>
+<!-- Start stop download latest recording -->
+            <tr>
+                <td>
+                    <form action="/start/" method="post">
+                        <button name="startButton" type="submit">Start Recording</button>
+                    </form>
+                </td>
+                <td>
+                    <form action="/stop/" method="post">
+                        <button name="stopButton" type="submit">Stop Recording</button>
+                    </form>
+                </td>
+
+                <td>
+                    <form action="/download_last/" method="post">
+                        <button name="downloadLast" type="submit">Download last recording</button>
+                    </form>
+                </td>
+            </tr>
+            </td>
+            </tr>
+        </tbody>
+    </table>
+
+    <br><br>
+
+
+
+
+
+</body>
+
+</html>

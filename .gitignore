@@ -1,3 +1,5 @@
 /detectors/yolo_detector/weights/*
 /detectors/mask_rcnn/weights/*
+*.json
+*.txt
 **/__pycache__

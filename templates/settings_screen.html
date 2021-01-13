@@ -1,0 +1,159 @@
+<html>
+
+<head>
+    <title>Sewer inspector application</title>
+    <style>
+        #general_table_style {
+            font-family: Arial, Helvetica, sans-serif;
+            border-collapse: collapse;
+            width: 100%;
+        }
+
+        #general_table_style td,
+        #general_table_style th {
+            border: 1px solid #ddd;
+            padding: 8px;
+        }
+
+        #general_table_style tr:nth-child(even) {
+            background-color: #f2f2f2;
+        }
+
+        #general_table_style tr:hover {
+            background-color: #ddd;
+        }
+
+        #general_table_style th {
+            padding-top: 12px;
+            padding-bottom: 12px;
+            text-align: left;
+            background-color: darkcyan;
+            color: white;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Sewer inspector application</h1>
+
+    <form action="/" method="GET">
+        <button name="backButton" type="submit">Back</button>
+    </form>
+
+    <table id="general_table_style" name="connectionTable">
+        <tbody>
+            <caption><strong>Network status</strong></caption>
+            <tr>
+                <th>
+                    <strong>Current connections</strong>
+                </th>
+                <th>
+                    <strong> wifi interface :</strong> {{current_network}}
+                </th>
+                <th>
+                    <strong> ethernet interface: {{current_network}}
+                </th>
+            </tr>
+
+
+            <tr>
+                <form action="/post_credentials/" method="post">
+                    <td>camera name </td>
+                    <td>password</td>
+                    <td>
+                        <button name="submitCameraCredentials" type="submit">Submit cameraCredentials</button>
+                    </td>
+            </tr>
+            <tr>
+                <td><input name="cameraName" type="text" /> </td>
+                <td><input name="cameraPassword" type="text" /></td>
+                <td>Name: {{cameraName}} | Password: {{cameraPassword}}</td>
+                </form>
+            </tr>
+
+            <tr>
+                <td></td>
+                <td>
+                    <form action="/connect_to_ricoh/" method="post">
+                        <button name="cameraWifi" type="submit">Connect to camera Wifi</button>
+                    </form>
+                </td>
+                <td></td>
+
+            </tr>
+
+        </tbody>
+    </table>
+    <br><br>
+
+
+    <table id="general_table_style" name="depthDeviceTable">
+        <tbody>
+            <caption>
+                <strong>Depth device control</strong>
+            </caption>
+
+            <tr>
+                <th>Depth device status</td>
+                <th>
+                    {% if realsense_device_status %}
+                    Depth device is operational..
+                    {% else %}
+                    Depth device streams are not enabled....
+                    {% endif %}
+                </th>
+                <th></th>
+            </tr>
+
+            <tr>
+                <td></td>
+                <td>
+                    <form action="/realsense_on/" method="post">
+                        <button name="realsenseOn" type="submit">Turn depth device on</button>
+                    </form>
+                </td>
+
+                <td>
+                    <form action="/realsense_off/" method="post">
+                        <button name="realsenseOff" type="submit">Turn depth device off</button>
+                    </form>
+                </td>
+            </tr>
+        </tbody>
+    </table>
+
+    <br><br>
+
+    <table id="general_table_style" name="detectorControlTable">
+        <tbody>
+            <tr>
+                <th><strong>Detector control</strong></th>
+                <th>Detection enabled: {{detector_enabled}}</th>
+                <th></th>
+            </tr>
+
+            <tr>
+                <td>
+                    <form action="/enable_detector_yolo/" method="post">
+                        <button name="detectorOn" type="submit"> Launch Yolo detector</button>
+                    </form>
+                </td>
+                <td>
+                    <form action="/enable_detector_mrcnn/" method="post">
+                        <button name="detectorOn" type="submit"> Launch Mask RCNN detector</button>
+                    </form>
+                </td>
+                <td>
+                    <form action="/disable_detector/" method="post">
+                        <button name="detectorOff" type="submit">Detector off</button>
+                    </form>
+                </td>
+            </tr>
+        </tbody>
+    </table>
+
+
+
+</body>
+
+</html>

@@ -1,0 +1,409 @@
+<html>
+
+<head>
+    <title>Inspection </title>
+    <!-- Add css.. -->
+    <link rel="stylesheet" href="../templates/styles.css" />
+    <!-- Calendar -->
+    <script src="https://cdn.syncfusion.com/ej2/dist/ej2.min.js" type="text/javascript"></script>
+
+    <link href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.syncfusion.com/ej2/material.css" rel="stylesheet">
+    <!-- table styles -->
+    <style>
+        #general_table_style,
+        #inspection_table {
+            font-family: Arial, Helvetica, sans-serif;
+            border-collapse: collapse;
+            width: 100%;
+        }
+
+        #general_table_style td,
+        #inspection_table td,
+        #general_table_style th,
+        #inspection_table th {
+            border: 1px solid #ddd;
+            padding: 8px;
+        }
+
+        #general_table_style tr:nth-child(even),
+        #inspection_table tr:nth-child(even) {
+            background-color: #f2f2f2;
+        }
+
+        #general_table_style tr:hover,
+        #inspection_table tr:hover {
+            background-color: #ddd;
+        }
+
+        #general_table_style th,
+        #inspection_table th {
+            padding-top: 12px;
+            padding-bottom: 12px;
+            text-align: left;
+            background-color: darkcyan;
+            color: white;
+        }
+    </style>
+</head>
+
+<body>
+    <form action="/" method="GET">
+        <button name="back" type="submit">Go back to starting screen</button>
+    </form>
+    <!-- Inspection control -->
+    <table id="general_table_style" name="lightsTable">
+        <tbody>
+            <caption>
+                <strong>Inspection control</strong>
+            </caption>
+            <!-- 360 camera control -->
+            <tr>
+                <th colspan="3">360 camera control</th>
+            </tr>
+
+            <tr>
+                <td>Ricoh device status: {{ricoh_status}}</td>
+                <td>
+                    <form action="/start/" method="POST">
+                        <button name="startInspection" type="submit">Start inspection</button>
+                    </form>
+                </td>
+
+                <td>
+                    <form action="/stop/" method="POST">
+                        <button name="stopInspection" type="submit">Stop inspection</button>
+                    </form>
+                </td>
+            </tr>
+        </tbody>
+    </table>
+
+    <!-- Inspection details table -->
+    <form action="/create_report/" method="post">
+        <table id="general_table_style" name="inspectionDetails">
+            <tbody>
+                <caption>
+                    <strong>Inspection</strong>
+                </caption>
+
+                <!-- Inspection details -->
+                <th colspan="3">
+                    Inspection details
+                </th>
+
+                <tr>
+                    <td>Name:</td>
+                    <td>
+                        {% if report_details.operator_name %}
+                        {{report_details.operator_name}}
+                        {% else %}
+                        <input name="inspectorName" type="text" />
+                        {% endif %}
+                    </td>
+
+                <tr>
+                    <td>Date:</td>
+                    <td>
+                        <!-- Calendar -->
+                        <div id="wrapper">
+                            <!-- add date from report_details -->
+                            {% if report_details.inspection_date %}
+                            {{report_details.inspection_date}}
+                            {% else %}
+                            <input id="datepicker" type="text">
+                            {% endif %}
+                        </div>
+                    </td>
+                </tr>
+
+                <!-- pipeline details -->
+                <th colspan="3">
+                    Location
+                </th>
+
+                <tr>
+                    <td> City </td>
+                    <td>
+                        {% if report_details.city %}
+                        {{report_details.city}}
+                        {% else %}
+                        <input name="city" type="text" />
+                        {% endif %}
+                    </td>
+                </tr>
+
+                <tr>
+                    <td> Street </td>
+                    <td>
+                        {% if report_details.street %}
+                        {{report_details.street}}
+                        {% else %}
+                        <input name="street" type="text" />
+                        {% endif %}
+                    </td>
+                </tr>
+
+                <th colspan="3">
+                    Pipe and manhole ID
+                </th>
+
+                <tr>
+                    <td>Pipe ID:</td>
+                    <td colspan="2">
+                        {% if report_details.pipe_id %}
+                        {{report_details.pipe_id}}
+                        {% else %}
+                        <input name="pipe_id" type="text" />
+                        {% endif %}
+                    </td>
+                </tr>
+
+                <tr>
+                    <td>Starting manhole ID:</td>
+                    <td colspan="2">
+                        {% if report_details.manhole_id %}
+                        {{report_details.manhole_id}}
+                        {% else %}
+                        <input name="manhole_id" type="text" />
+                        {% endif %}
+                    </td>
+                </tr>
+
+                <!-- pipe specs -->
+                <th colspan="3">
+                    Pipe specifications
+                </th>
+
+                <tr>
+                    <td>Dimensions:</td>
+                    <td>
+                        {% if report_details.dimensions %}
+                        {{report_details.dimensions}}
+                        {% else %}
+                        <select name="sizes" id="pipe_size">
+                            <option value="300">300mm</option>
+                            <option value="500">500mm</option>
+                            <option value="600">600mm</option>
+                            <option class="editable" value="other">Other</option>
+                        </select> {% endif %}
+                    </td>
+                </tr>
+                <tr>
+                    <td>Shape:</td>
+                    <td>
+                        <input class="editOption" style="display:none;" placeholder="Text juaj"></input>
+                        {% if report_details.shape %}
+                        {{report_details.shape}}
+                        {% else %}
+                        <select name="shapes" id="pipe_shape">
+                            <option value="circular">Circular</option>
+                            <option value="eggShaped">Egg shaped</option>
+                            <option value="uShaped">U shaped</option>
+                        </select>
+                        {% endif %}
+                    </td>
+                </tr>
+
+                <tr>
+                    <td>Material:</td>
+                    <td colspan="2">
+                        {% if report_details.material %}
+                        {{report_details.material}}
+                        {% else %}
+                        <select name="materials" id="pipe_material">
+                            <option value="concrete">Concrete</option>
+                            <option value="pvc">PVC</option>
+                            <option value="clay">Clay</option>
+                            <option value="iron">Iron</option>
+                        </select>
+                        {% endif %}
+                    </td>
+                </tr>
+                <tr>
+                    <td colspan="2">
+                        <button name="submitInspectionReport" type="submit">Submit inspection report data</button>
+                    </td>
+                    <td colspan="1">
+
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </form>
+
+
+    <!-- Preview from camera and inspection data -->
+    <div>
+        <table id="general_table_style" name="inspectionWindow">
+            <caption>
+                <strong>Inspection preview</strong>
+            </caption>
+            <!-- Table row -->
+            <tr>
+                <!-- Camera col -->
+                <td colspan="2">
+                    <!-- Load the video stream if depth device is enabled -->
+                    {% if realsense_device_status %}
+                    <img id="camPreview" src="{{ url_for('video_feed') }}">
+                    <!-- else print text... -->
+                    {% else %}
+                    Depth device streams are not enabled....
+                    {% endif %}
+                </td>
+
+                <!-- Info and control col -->
+                <td>
+                    <table id="general_table_style" name="controlWindow">
+                        <tbody>
+                            <tr>
+                                <form action="/new_report/" method="POST">
+                                    <button name="resetReportButton" type="submit">Add detections to report and begin
+                                        new inspection</button>
+                                </form>
+                            </tr>
+                            <!-- Control illumination -->
+                            <tr>
+                                <th>Lights status</th>
+                                <th colspan="2">Turn illumination: </th>
+                            </tr>
+                            <tr>
+                                <td>{{illumination_status}}</td>
+                                <td>
+                                    <form action="/illumination_on/" method="post">
+                                        <button name="illuminationOnButton" type="submit">On</button>
+                                    </form>
+                                </td>
+                                <td>
+                                    <form action="/illumination_off/" method="post">
+                                        <button name="illuminationOffButton" type="submit">Off</button>
+                                    </form>
+                                </td>
+                            </tr>
+
+                            <!-- Inspection timer -->
+                            <tr>
+                                <td><strong> Time</strong></td>
+                                <td colspan="2">
+                                    <div id="travel_time"></div>
+                                </td>
+
+                            </tr>
+
+                            <!-- Travel distance -->
+                            <tr>
+                                <td><strong> Traveled distance:</strong></td>
+                                <td colspan="2">
+                                    <div id="travel_distance"></div>
+                                </td>
+
+                            </tr>
+                        </tbody>
+                    </table>
+                    <!-- Add space -->
+                    <br><br>
+                    <!-- Scrollable table -->
+                    <div style="height: 300px; overflow: auto">
+                        <!--  Detection results -->
+                        <table id="inspection_table" name="inspectionWindow">
+                            <caption>
+                                <strong>Detection results</strong>
+                            </caption>
+
+                            <tbody>
+                                <tr>
+                                    <td>Detection count:</td>
+                                    <td>
+                                        <div id="detectionCount"></div>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <th>Type</th>
+                                    <th>Distance from start</th>
+                                    <th>Time from start</th>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                </td>
+            </tr>
+        </table>
+
+
+    </div>
+
+    <!-- Update detections table -->
+    <!--  Pings the data endpoint and updates the detections table -->
+    <script>
+        async function pollData() {
+            // Get detection data
+            let response = await (await fetch("http://127.0.0.1:5002/data")).text();
+            // console.log('response: ' + response);
+            let data = JSON.parse('' + response + '');
+
+            var table = document.getElementById("inspection_table");
+            // Clear table data
+            for (var i = 2; i < table.rows.length; i++) {
+                table.deleteRow(i);
+            }
+
+            // populate with data
+            for (var j = 2; j < data.length; j++) {
+                var parsedData = JSON.parse(data[j])
+                var row = table.insertRow(j);
+                // var cell1 = row.insertCell(0);
+                var cell2 = row.insertCell(0);
+                var cell3 = row.insertCell(1);
+                var cell4 = row.insertCell(2);
+                // Uncomment to add indexing and current time.
+                // var cell5 = row.insertCell(4);
+
+                // cell1.innerHTML = j;
+
+                // var today = new Date();
+                // var time = today.getHours() + ":" + today.getMinutes() + ":" + today.getSeconds();
+                // cell5.innerHTML = time;
+
+                cell2.innerHTML = parsedData.type;
+                cell3.innerHTML = parsedData.location;
+                cell4.innerHTML = parsedData.time_from_start;
+                // Get the latest date and time and update the labels
+                if (j == 2) {
+                    var travel_time = document.getElementById("travel_time");
+                    var travel_distance = document.getElementById("travel_distance");
+                    // this returns the count not of all detections, but the X amount returned by the API (currently 25)
+                    var detectionCount = document.getElementById("detectionCount");
+
+                    travel_time.innerText = parsedData.time_from_start;
+                    travel_distance.innerText = parsedData.location;
+                    detectionCount.innerText = data.length;
+                }
+            }
+
+            // Call the function every 7.5 seconds
+            // TODO add option to set refresh rate..
+            setTimeout(pollData, 7500);
+        }
+        // start the script 
+        pollData();
+    </script>
+
+    <!-- Calendar related -->
+    <script>
+        ej.base.enableRipple(true);
+        var datepicker = new ej.calendars.DatePicker();
+        datepicker.appendTo('#datepicker');
+    </script>
+    <style>
+        #wrapper {
+            max-width: 246px;
+            margin: 30px auto;
+            padding-top: 50px;
+        }
+    </style>
+
+
+</body>
+
+</html>

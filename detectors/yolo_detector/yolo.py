@@ -3,6 +3,7 @@ import numpy as np
 import pyrealsense2 as rs
 import time
 import cv2
+from models.detection import Detection
 
 yolo_coco_labels = os.path.join(
     "detectors/yolo_detector/weights/yolo-coco/coco.names")
@@ -53,7 +54,8 @@ class Yolo:
     def draw_results_no_depth(self, layerOutputs, input_image):
         return self.draw_results(layerOutputs, input_image)
 
-    def draw_results(self, layerOutputs, input_image, aligned_depth_frame=None, depth_scale=None, verbose=None):
+    def draw_results(self, layerOutputs, input_image, aligned_depth_frame=None, depth_scale=None, travel_distance=None, elapsed_time=None, verbose=None):
+        detections = []
         (H, W) = input_image.shape[:2]
         boxes = []
         confidences = []
@@ -101,31 +103,38 @@ class Yolo:
                 # extract the bounding box coordinates
                 (x, y) = (boxes[i][0], boxes[i][1])
                 (w, h) = (boxes[i][2], boxes[i][3])
-                distance = None
                 distance_center = None
                 if aligned_depth_frame and depth_scale:
                     # Good accuracy
                     distance_center = self.get_distance_center(
                         aligned_depth_frame, depth_scale, x, y, w, h, self.LABELS[classIDs[i]])
-                    # Better accuracy for objects that completely fill the bounding box, otherwise distance becomes inaccuraty
-                    distance = self.get_distance_bounding_box(
-                        aligned_depth_frame, depth_scale, x, y, w, h, self.LABELS[classIDs[i]])
+
                 # draw a bounding box rectangle and label on the image
                 col = [int(c) for c in self.COLORS[classIDs[i]]]
                 cv2.rectangle(input_image, (x, y), (x + w, y + h), col, 2)
                 # add dot at center
                 cv2.circle(input_image, (int((x + (x + w))/2),
                                          int((y + (y + h))/2)), radius=3, color=col, thickness=3)
-                if distance or distance_center:
+                detect_mod = None
+                if distance_center:
                     text = "{}: {:.4f} : distance {:.4f}m".format(
                         self.LABELS[classIDs[i]], confidences[i], distance_center)
+                    # Create detection object to return
+                    detect_mod = Detection(
+                        damage_type=self.LABELS[classIDs[i]], location=travel_distance, distance=distance_center, time_from_start=elapsed_time)
                 else:
                     text = "{}: {:.4f}".format(
                         self.LABELS[classIDs[i]], confidences[i])
+                    # Create detection object to return
+                    detect_mod = Detection(
+                        damage_type=self.LABELS[classIDs[i]], location=travel_distance, time_from_start=elapsed_time)
+
                 cv2.putText(input_image, text, (x, y - 5), cv2.FONT_HERSHEY_SIMPLEX,
                             0.5, col, 2)
-
-        return input_image
+                # Appends to local list to return
+                detections.append(detect_mod)
+        # Return the image and the list with detections....
+        return input_image, detections
 
     # Calculates the distance to the center of the bounding box
     # Good accuracy in general, not big deviations from ground truth
@@ -133,47 +142,12 @@ class Yolo:
         # center distance measurement
         cx = int((x + (x + w))/2)
         cy = int((y + (y + h))/2)
-
-        dist = aligned_depth_frame.get_distance(int(cx), int(cy))
-        if verbose:
-            print("Distance measurement Realsense... Detected {} {} meters away".format(
-                label, dist))
-        return dist
-
-    # Help method to compute distance from depth for bounding box
-    # Good accuracy for objects that completely fill the bounding box, otherwise there are inaccuracies
-    def get_distance_bounding_box(self, aligned_depth_frame, depth_scale, x, y, w, h, label, verbose=False):
-        return self.get_distance(aligned_depth_frame, depth_scale, x, y, w, h, label, verbose=False)
-
-    # Helper method to scale down bounding box and call {@get_distance}
-    def get_distance_smaller_box(self, aligned_depth_frame, depth_scale, x, y, w, h, label, verbose=False):
-        # create smaller BB
-        x_2 = (x + w)/4
-        y_2 = (y + h) / 4
-        w_2 = (w - x) / 4
-        h_2 = (h - y)/4
-        return self.get_distance(aligned_depth_frame, depth_scale, x_2, y_2, w_2, h_2, label, verbose=False)
-
-    # Calculates distance based on mean of all the values in the cropped from the depth image segment
-    def get_distance(self, aligned_depth_frame, depth_scale, x, y, w, h, label, verbose=False):
-        xmin_depth = int(x)
-        ymin_depth = int(y)
-        xmax_depth = int(x + w)
-        ymax_depth = int(y + h)
-
-        xmin_depth, ymin_depth, xmax_depth, ymax_depth
-
-        depth = np.asanyarray(aligned_depth_frame.get_data())
-
-        # Crop depth data:
-        depth = depth[xmin_depth:xmax_depth,
-                      ymin_depth: ymax_depth].astype(float)
-
-        # Get data scale from the device and convert to meters
-        depth = depth * depth_scale
-        dist, _, _, _ = cv2.mean(depth)
-
-        if verbose:
-            print("Detected a {0} {1:.3} meters away.".format(label, dist))
-
-        return dist
+        try:
+            dist = aligned_depth_frame.get_distance(int(cx), int(cy))
+            if verbose:
+                print("Distance measurement Realsense... Detected {} {} meters away".format(
+                    label, dist))
+            return dist
+        except Exception as e:
+            print("Error in distance measurement")
+            return None
