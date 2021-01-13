@@ -24,6 +24,8 @@ import time
 from camera import VideoCamera
 
 import platform
+import sys
+
 # Uncomment on nano to import GPIO modules
 
 # setup illumination on nano
@@ -36,8 +38,8 @@ else:
     use_gpio = True
 
     # Pin Definitions
-    output_pin = 23  # BCM pin 23, BOARD pin 16
-    output_pin2 = 27  # BCM 27, board 13
+    output_pin = 27  # BCM 27, board 13
+    output_pin2 = 23  # BCM pin 23, BOARD pin 16
     output_pin3 = 18  # BCN 18, board 12
     # Uncomment on nano to init gpio pins...
     GPIO.setmode(GPIO.BCM)  # BCM pin-numbering scheme from Raspberry Pi
@@ -208,7 +210,7 @@ def enable_detector_mrcnn():
 
 @ app.route("/disable_detector/", methods=['POST'])
 def disable_detector():
-    global enable_detection
+    global enable_detection, detector
 
     detector = None
 
@@ -334,6 +336,7 @@ def connect_ricoh():
         if not (cameraName and cameraPassword):
             cameraName = 'THETAYL00160236'
             cameraPassword = '00160236'
+
         ricoh = ricoh_camera(cameraName, cameraPassword)
         print(ricoh.get_device_options())
         # set device in video mode
@@ -394,14 +397,18 @@ def gen():
                 # TODO add real calculation
                 distance += 0.001
                 ##
-                if enable_detection:
-                    detection = detector.detect(color_image)
-                    color_image, detections = detector.draw_results(
-                        detection, color_image, depth_frame, camera.depth_scale, travel_distance=distance, elapsed_time=elapsed_time)
+                try:
+                    if enable_detection:
+                        detection = detector.detect(color_image)
+                        if detection:
+                            color_image, detections = detector.draw_results(
+                                detection, color_image, depth_frame, camera.depth_scale, travel_distance=distance, elapsed_time=elapsed_time)
 
-                    # Append the results to the entire list with detection results
-                    detections_results.extend(detections)
-#                 # encode and return
+                            # Append the results to the entire list with detection results
+                            detections_results.extend(detections)
+                except Exception as e:
+                    print("exception in detection")
+#               # encode and return
                 ret, jpg = cv2.imencode('.jpg', color_image)
                 yield (b'--frame\r\n'
                        b'Content-Type: image/jpg\r\n\r\n' + jpg.tobytes() + b'\r\n\r\n')
@@ -410,4 +417,15 @@ def gen():
 
 
 if __name__ == '__main__':
-    app.run(host='127.0.0.1', port=5002, debug=True)
+    desired_host = None
+    #desired_host = str(sys.argv)
+
+    for arg in sys.argv[1:]:
+        print(arg)
+        desired_host = arg
+
+    if not desired_host:
+        desired_host = '127.0.0.1'
+
+    print(desired_host)
+    app.run(host=desired_host, port=5002, debug=True)

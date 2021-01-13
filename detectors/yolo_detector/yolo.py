@@ -44,7 +44,11 @@ class Yolo:
             input_image, 1 / 255.0, (416, 416), swapRB=True, crop=False)
         self.net.setInput(blob)
         start = time.time()
-        layerOutputs = self.net.forward(self.ln)
+        layerOutputs = None
+        try:
+            layerOutputs = self.net.forward(self.ln)
+        except Exception as e:
+            print("exception in running frame through yolo framework")
         end = time.time()
         # show timing information on YOLO
         if verbose:
