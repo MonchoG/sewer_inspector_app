@@ -31,10 +31,12 @@ import sys
 # Uncomment on nano to import GPIO modules
 
 # setup illumination on nano
+use_cuda = True
 use_gpio = False
 if str(platform.platform()).__contains__("Windows"):
     print("On windows, not importing GPIO")
     use_gpio = False
+    use_cuda = False
 else:
     import RPi.GPIO as GPIO
     use_gpio = True
@@ -110,6 +112,8 @@ def render_camera_view():
     return render_template('inspection_screen.html', travel_distance=distance, the_inspection_time=elapsed_time, ricoh_status=ricoh_state, cameraName=cameraName, cameraPassword=cameraPassword, illumination_status=illumination, realsense_device_status=realsense_enabled, detector_enabled=enable_detection, detections=detections_results, report_details=inspection_report)
 
 # Navigate to ricoh page
+
+
 @ app.route('/ricoh/')
 def render_ricoh_view(media_files=None):
     global ricoh, ricoh_state, cameraName, cameraPassword
@@ -171,6 +175,8 @@ def start_realsense_camera():
 
 # Turn depth cam off
 # TODO add exception handling , returning appropriate response...
+
+
 @ app.route("/realsense_off/", methods=['POST'])
 def stop_realsense_camera():
     global realsense_enabled, camera
@@ -183,24 +189,28 @@ def stop_realsense_camera():
 
 # Load yolo detector
 # TODO add exception handling , returning appropriate response...
+
+
 @ app.route("/enable_detector_yolo/", methods=['POST'])
 def enable_detector_yolo():
-    global enable_detection, detector
+    global enable_detection, detector, use_cuda
     if not enable_detection:
         enable_detection = True
 
-    detector = Yolo(confidence_param=0.3, thresh_param=0.5)
+    detector = Yolo(confidence_param=0.3, thresh_param=0.5, use_cuda=use_cuda)
     if detector is not None:
         enable_detection = "Yolo detector"
     return render_settings_view()
 
 # Load mask rcnn detector
 # TODO add exception handling , returning appropriate response...
+
+
 @ app.route("/enable_detector_mrcnn/", methods=['POST'])
 def enable_detector_mrcnn():
-    global enable_detection, detector
+    global enable_detection, detector,use_cuda
 
-    detector = MRCNN(use_cuda=True)
+    detector = MRCNN(use_cuda=use_cuda)
 
     if detector is not None:
         enable_detection = "Mask RCNN"
@@ -209,6 +219,8 @@ def enable_detector_mrcnn():
 
 # Disable detector
 # TODO add exception handling , returning appropriate response...
+
+
 @ app.route("/disable_detector/", methods=['POST'])
 def disable_detector():
     global enable_detection, detector
@@ -223,6 +235,8 @@ def disable_detector():
 
 # Writes the inspection report data to json file.
 # TODO add time to inspection report name ...
+
+
 @ app.route("/new_report/", methods=['POST'])
 def new_report():
     global inspection_report, detections_results, start_time
@@ -237,6 +251,8 @@ def new_report():
     return render_camera_view()
 
 # Creates inspection report object based on the input form data
+
+
 @ app.route("/create_report/", methods=['POST'])
 def create_report():
     global inspection_report
