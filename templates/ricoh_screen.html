@@ -143,6 +143,10 @@
                             <button name="downloadFileButton" type="submit" , value={{mfile.fileUrl}}>Download for
                                 processing</button>
                         </form>
+                        <form action="/delete_file/" method="post">
+                            <button name="deleteFileButton" type="submit" , value={{mfile.fileUrl}}>Delete device from
+                                camera storage</button>
+                        </form>
                         {%endif%}
                     </td>
                 </tr>
@@ -219,7 +223,7 @@
                                 </th>
                                 <th>
                                     <form action="/set_manual_settings/" method="POST" id='manual'>
-                                        
+
                                         <button name="manualSetting" type="submit"
                                             onclickonclick="document.getElementById('manual').submit();">Set camera
                                             setting</button>

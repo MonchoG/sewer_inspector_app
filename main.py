@@ -110,8 +110,6 @@ def render_camera_view():
     return render_template('inspection_screen.html', travel_distance=distance, the_inspection_time=elapsed_time, ricoh_status=ricoh_state, cameraName=cameraName, cameraPassword=cameraPassword, illumination_status=illumination, realsense_device_status=realsense_enabled, detector_enabled=enable_detection, detections=detections_results, report_details=inspection_report)
 
 # Navigate to ricoh page
-
-
 @ app.route('/ricoh/')
 def render_ricoh_view(media_files=None):
     global ricoh, ricoh_state, cameraName, cameraPassword
@@ -173,8 +171,6 @@ def start_realsense_camera():
 
 # Turn depth cam off
 # TODO add exception handling , returning appropriate response...
-
-
 @ app.route("/realsense_off/", methods=['POST'])
 def stop_realsense_camera():
     global realsense_enabled, camera
@@ -187,8 +183,6 @@ def stop_realsense_camera():
 
 # Load yolo detector
 # TODO add exception handling , returning appropriate response...
-
-
 @ app.route("/enable_detector_yolo/", methods=['POST'])
 def enable_detector_yolo():
     global enable_detection, detector
@@ -202,8 +196,6 @@ def enable_detector_yolo():
 
 # Load mask rcnn detector
 # TODO add exception handling , returning appropriate response...
-
-
 @ app.route("/enable_detector_mrcnn/", methods=['POST'])
 def enable_detector_mrcnn():
     global enable_detection, detector
@@ -217,8 +209,6 @@ def enable_detector_mrcnn():
 
 # Disable detector
 # TODO add exception handling , returning appropriate response...
-
-
 @ app.route("/disable_detector/", methods=['POST'])
 def disable_detector():
     global enable_detection, detector
@@ -233,8 +223,6 @@ def disable_detector():
 
 # Writes the inspection report data to json file.
 # TODO add time to inspection report name ...
-
-
 @ app.route("/new_report/", methods=['POST'])
 def new_report():
     global inspection_report, detections_results, start_time
@@ -249,8 +237,6 @@ def new_report():
     return render_camera_view()
 
 # Creates inspection report object based on the input form data
-
-
 @ app.route("/create_report/", methods=['POST'])
 def create_report():
     global inspection_report
@@ -271,16 +257,11 @@ def create_report():
 
 
 # Stop theta video capture
-# Connects to device wifi # TODO check how this works...
 # Sends the stop capture command
 # Requires to have ricoh object set
 @ app.route("/stop/", methods=['POST'])
 def stop_capture():
     global ricoh, start_time, elapsed_time
-    os.system(
-        "nmcli d wifi connect {} password {} iface {}"
-        .format("THETAYL00160236.OSC", "00160236", "wlp8s0"))
-
     elapsed_time = time.time() - start_time
     start_time = None
     if ricoh:
@@ -307,13 +288,12 @@ def start_capture():
     return render_camera_view()
 
 # Downloads the last recorded file from ricoh camera device
-# TODO add to ricoh page and add more options
 
 
 @ app.route("/download_last/", methods=['POST'])
 def download_last():
     global ricoh
-    response_start = ricoh.download_last()
+    ricoh.download_last()
     return render_template('index.html')
 
 #  Lists files
@@ -328,8 +308,6 @@ def list_ricoh_files():
     for mfile in ricoh_files:
         files.append(mfile.toJSON())
 
-    # return Response(files,  mimetype='application/json')
-
     return render_ricoh_view(media_files=files)
 
 
@@ -343,6 +321,20 @@ def download_file():
             ricoh.download_file(request.form['downloadFileButton'])
             print("Download complete")
     return render_ricoh_view()
+
+# Deletes selected file from table
+
+
+@ app.route("/delete_file/", methods=['POST'])
+def delete_file():
+    global ricoh
+
+    if request.method == 'POST':
+        if request.form.get("deleteFileButton"):
+            ricoh.delete_file([request.form['deleteFileButton']])
+            print("Delete complete")
+    return render_ricoh_view()
+
 # Sets the required credentials to access ricoh device API
 
 
@@ -390,6 +382,8 @@ def connect_ricoh():
     else:
         return render_ricoh_view()
 
+# Method to update ricoh state
+
 
 @ app.route("/update_ricoh_info/", methods=['GET', 'POST'])
 def get_ricoh_info():
@@ -399,6 +393,7 @@ def get_ricoh_info():
     return render_ricoh_view()
 
 
+# Changes camera mode(video/image shooting)
 @ app.route("/set_camera_capture_mode/", methods=['GET', 'POST'])
 def set_camera_capture_mode():
     global ricoh
@@ -409,36 +404,36 @@ def set_camera_capture_mode():
         ricoh.set_device_imageMode()
     return render_ricoh_view()
 
+# Sets ricoh device in mode which will set ISO, shutter and aperature with manualy selected values
+
 
 @ app.route("/set_manual_settings/", methods=['GET', 'POST'])
 def set_manual_settings():
     global ricoh
     iso = request.form['ISOsensitivity']
-    shutter =  request.form['shutterSpeed']
+    shutter = request.form['shutterSpeed']
     aperature = request.form['aperature']
-    ricoh.set_manual_camera_settings(int(iso), float(aperature), float(shutter))
+    ricoh.set_manual_camera_settings(
+        int(iso), float(aperature), float(shutter))
     return render_ricoh_view()
 
 
+# Sets ricoh device in mode which will set ISO, shutter and aperature automatically
 @ app.route("/set_automatic_settings/", methods=['GET', 'POST'])
-def set_camera_iso():
+def set_automatic_settings():
     global ricoh
     ricoh.set_settings_automatically()
     return render_ricoh_view()
-
-
-# Endpoint to optain detection results...
-# Returns list with JSON
 
 # Endpoint which serves the detections data in json format
 # Change len(data) == X to increase amount of returned items
 # the response contains the latest detection at the first index
 
 
-@ app.route('/data', methods = ["GET", "POST"])
+@ app.route('/data', methods=["GET", "POST"])
 def update_table():
     global detections_results
-    data=[]
+    data = []
 
     for detect in reversed(detections_results):
         data.append(detect.toJSON())
@@ -446,8 +441,8 @@ def update_table():
         if len(data) == 25:
             break
 
-    response=make_response(json.dumps(data))
-    response.content_type='application/json'
+    response = make_response(json.dumps(data))
+    response.content_type = 'application/json'
     return response
 
 
@@ -455,7 +450,7 @@ def update_table():
 @ app.route('/video_feed')
 def video_feed():
     return Response(gen_realsense_feed(),
-                    mimetype = 'multipart/x-mixed-replace; boundary=frame')
+                    mimetype='multipart/x-mixed-replace; boundary=frame')
 
 # # Returns video stream from depth camera device
 # # Runs detection if enabled
@@ -467,28 +462,28 @@ def gen_realsense_feed():
     if realsense_enabled:
         while realsense_enabled:
             if start_time:
-                last_time=current_time
-                current_time=time.time()
-                elapsed_time=current_time - start_time
+                last_time = current_time
+                current_time = time.time()
+                elapsed_time = current_time - start_time
             if camera:
-                color_image, depth_image, depth_frame, acceleration_x, acceleration_y, acceleration_z, gyroscope_x, gyroscope_y, gyroscope_z=camera.run()
+                color_image, depth_image, depth_frame, acceleration_x, acceleration_y, acceleration_z, gyroscope_x, gyroscope_y, gyroscope_z = camera.run()
                 # Hardcoded distance increase...
                 # TODO add real calculation
                 distance += 0.001
                 ##
                 try:
                     if enable_detection:
-                        detection=detector.detect(color_image)
+                        detection = detector.detect(color_image)
                         if detection:
-                            color_image, detections=detector.draw_results(
-                                detection, color_image, depth_frame, camera.depth_scale, travel_distance = distance, elapsed_time = elapsed_time)
+                            color_image, detections = detector.draw_results(
+                                detection, color_image, depth_frame, camera.depth_scale, travel_distance=distance, elapsed_time=elapsed_time)
 
                             # Append the results to the entire list with detection results
                             detections_results.extend(detections)
                 except Exception as e:
                     print("exception in detection")
 #               # encode and return
-                ret, jpg=cv2.imencode('.jpg', color_image)
+                ret, jpg = cv2.imencode('.jpg', color_image)
                 yield (b'--frame\r\n'
                        b'Content-Type: image/jpg\r\n\r\n' + jpg.tobytes() + b'\r\n\r\n')
                 # Write frame to disk
@@ -540,16 +535,14 @@ def gen_ricoh_feed():
         print("theta error _preview: {0}".format(err))
 
 
+# Can pass desired IP host adress, else uses 127.0.0.1
+# Always port 5002
 if __name__ == '__main__':
     desired_host = None
-    # desired_host = str(sys.argv)
-
     for arg in sys.argv[1:]:
-        print(arg)
         desired_host = arg
 
     if not desired_host:
         desired_host = '127.0.0.1'
 
-    print(desired_host)
     app.run(host=desired_host, port=5002, debug=True)

@@ -338,8 +338,9 @@
     <script>
         async function pollData() {
             // Get detection data
-            let response = await (await fetch("http://127.0.0.1:5002/data")).text();
-            // console.log('response: ' + response);
+            var baseUrl = window.location.protocol + "//" + window.location.host + "/" + "data";
+            let response = await (await fetch(baseUrl)).text();
+            console.log('response: ' + baseUrl);
             let data = JSON.parse('' + response + '');
 
             var table = document.getElementById("inspection_table");

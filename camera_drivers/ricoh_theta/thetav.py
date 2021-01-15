@@ -7,8 +7,6 @@ import time
 if __name__ == "__main__":
     from ricoh_models.ricoh_media_file import MediaFile
     from ricoh_models.ricoh_device_state import RicohState
-
-
 else:
     from camera_drivers.ricoh_theta.ricoh_models.ricoh_media_file import MediaFile
     from camera_drivers.ricoh_theta.ricoh_models.ricoh_device_state import RicohState
@@ -122,7 +120,7 @@ class RicohTheta:
 
     # Calls the "/osc/commands/execute" endpoint of ricoh Api using post
     # Sets the device to video mode, the parameters can be modified according to the API and need
-    def set_manual_camera_settings(self, iso,aperature,shutterSpeed ):
+    def set_manual_camera_settings(self, iso, aperature, shutterSpeed):
         body = json.dumps({"name": "camera.setOptions",
                            "parameters": {
                                "options": {
@@ -131,17 +129,16 @@ class RicohTheta:
                                    "aperature": aperature,
                                    "shutterSpeed": shutterSpeed}}})
         request = self.post_request("/osc/commands/execute", body)
-        print(request.json())
         return request.json()
      # Calls the "/osc/commands/execute" endpoint of ricoh Api using post
     # Sets the device to video mode, the parameters can be modified according to the API and need
+
     def set_settings_automatically(self):
         body = json.dumps({"name": "camera.setOptions",
                            "parameters": {
                                "options": {
                                    "exposureProgram": 2}}})
         request = self.post_request("/osc/commands/execute", body)
-        print(request.json())
         return request.json()
     # Calls the "osc/state" endpoint of ricoh Api using POST
     # Acquires the camera states. Use CheckForUpdates to check whether the state object has changed its contents.
@@ -170,7 +167,6 @@ class RicohTheta:
         body = json.dumps({"name": "camera.stopCapture"})
         request = self.post_request("/osc/commands/execute", body)
         json_response = request.json()
-        print(pretty_response(json_response))
         self.last_video = json_response["results"]["fileUrls"]
         if withDownload:
             self.download_files(json_response["results"]["fileUrls"])
@@ -185,7 +181,6 @@ class RicohTheta:
                                                                                 "entryCount": 10}})
         result = request.json()
         media_files = []
-        # print(result)
         if result['state'] == 'done':
             for media_file in result['results']['entries']:
                 medFile = MediaFile()
@@ -210,9 +205,9 @@ class RicohTheta:
                 # to a new file in binary mode.
                 f.write(response.content)
             file_count += 1
-            print("[INFO] Downloading file {}complete...".format("a_file[67:] "))
         print("[INFO] All files downloaded...")
 
+    # Download single file
     def download_file(self, file):
         if isinstance(file, str):
             # if file is string ( file link, parse the link to get file name and extension)
@@ -229,6 +224,16 @@ class RicohTheta:
             # to a new file in binary mode.
             f.write(response.content)
         print("[INFO] Downloading file {}complete...".format(file_name))
+
+    def delete_file(self, files):
+        request = requests.post(self.base_url + execute_command, json={'name': 'camera.delete',
+                                                                               'parameters':
+                                                                               {"fileUrls": files}})
+        if request.status_code == 200:
+            return True
+        else:
+            return False
+
 # Utils
 
 
