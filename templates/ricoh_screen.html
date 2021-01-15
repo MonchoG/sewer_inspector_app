@@ -39,7 +39,7 @@
     <form action="/" method="GET">
         <button name="backButton" type="submit">Back</button>
     </form>
-<!-- Connection table -->
+    <!-- Connection table -->
     <table id="general_table_style" name="connectionTable">
         <tbody>
             <caption><strong>Network status</strong></caption>
@@ -54,34 +54,36 @@
                     <strong> ethernet interface: {{current_network}}
                 </th>
             </tr>
+        </tbody>
+    </table>
 
-<!-- Post device credentials -->
-            <tr>
-                <form action="/post_credentials/" method="post">
-                    <td>camera name </td>
-                    <td>password</td>
-                    <td>
-                        <button name="submitCameraCredentials" type="submit">Submit cameraCredentials</button>
-                    </td>
-            </tr>
-            <tr>
-                <td><input name="cameraName" type="text" /> </td>
-                <td><input name="cameraPassword" type="text" /></td>
-                <td>Name: {{cameraName}} | Password: {{cameraPassword}}</td>
-                </form>
-            </tr>
+    <br><br>
 
+    <table id="general_table_style" name="connectToRicoh">
+        <!-- Post device credentials -->
+
+        <tbody>
             <tr>
-                <td></td>
-                <td>
-                    <form action="/connect_to_ricoh/" method="post">
+                <th>
+                    Name: {{cameraName}} | Password: {{cameraPassword}}
+                </th>
+                <th>Device status: {{ricoh_status}} </th>
+                <th>
+                    <form action="/connect_to_ricoh_screen/" method="post">
                         <button name="cameraWifi" type="submit">Connect to camera Wifi</button>
                     </form>
-                </td>
-                <td></td>
-
+                </th>
             </tr>
 
+            </th>
+            <tr>
+                <form action="/post_credentials/" method="post">
+                    <td><input name="cameraName" type="text" /> </td>
+                    <td><input name="cameraPassword" type="text" /></td>
+                    <td> <button name="submitCameraCredentials" type="submit">Submit cameraCredentials</button>
+                    </td>
+                </form>
+            </tr>
         </tbody>
     </table>
 
@@ -93,40 +95,24 @@
             <caption><strong>Ricoh device control</strong></caption>
 
 
+            <!-- Start stop download latest recording -->
             <tr>
-                <td>Ricoh device status
-                </td>
-                <td>
-                    {{ricoh_status}}
-                </td>
-                <td> <br> <button name="updateStatus" type="submit">Update status</button>
-                </td>
-            </tr>
-
-            <tr>
-
-                <th></th>
-                <th><strong>Recording control</strong></th>
-                <th></th>
-            </tr>
-<!-- Start stop download latest recording -->
-            <tr>
-                <td>
+                <th>
                     <form action="/start/" method="post">
                         <button name="startButton" type="submit">Start Recording</button>
                     </form>
-                </td>
-                <td>
+                </th>
+                <th>
                     <form action="/stop/" method="post">
                         <button name="stopButton" type="submit">Stop Recording</button>
                     </form>
-                </td>
+                </th>
 
-                <td>
+                <th>
                     <form action="/download_last/" method="post">
                         <button name="downloadLast" type="submit">Download last recording</button>
                     </form>
-                </td>
+                </th>
             </tr>
             </td>
             </tr>
@@ -136,7 +122,222 @@
     <br><br>
 
 
+    <div style="height: 300px; overflow: auto">
 
+        <table id="general_table_style" name="ricohFilesTable">
+            <tbody>
+                <caption><strong>List files</strong></caption>
+                <tr>
+                    <th colspan='4'>Media files on device</th>
+
+                </tr>
+                {% if media_files %}
+                {% for mfile in media_files %}
+                <tr>
+                    <td>{{mfile.name}}</td>
+                    <td>{{mfile.dateTime}}</td>
+                    <td>Resolution width: {{mfile.width}} height: {{mfile.height}}</td>
+                    <td>
+                        {%if mfile%}
+                        <form action="/download_file/" method="post">
+                            <button name="downloadFileButton" type="submit" , value={{mfile.fileUrl}}>Download for
+                                processing</button>
+                        </form>
+                        {%endif%}
+                    </td>
+                </tr>
+                {% endfor %}
+                {%else%}
+                <tr>
+                    <td colspan="4">Connect to device first</td>
+                </tr>
+                {%endif%}
+            </tbody>
+        </table>
+    </div>
+    <br><br>
+
+    <table id="general_table_style" name="previewAndSettingsTable">
+        <tbody>
+            <caption><strong>Live preview</strong></caption>
+            {%if deviceInfo%}
+            <tr>
+                <td>
+                    <img id="camPreview" src="{{ url_for('ricoh_feed') }}">
+                </td>
+
+                <td>
+                    <table id="general_table_style" name="previewAndSettingsTable">
+                        <tbody>
+                            <caption><strong>Device info</strong></caption>
+                            <tr>
+                                <th colspan="2">
+                                    <form action="/update_ricoh_info/" method="post">
+                                        <button name="updateInfo" type="submit">Refresh data</button>
+                                    </form>
+                                </th>
+                            </tr>
+                            <tr>
+                                <th>Device battery level</th>
+                                <td>{{deviceInfo.battery_level}}</td>
+                            </tr>
+                            <tr>
+                                <th>Device storage left</th>
+                                <td>{{deviceInfo.storage_left/1000000 }}</td>
+                            </tr>
+                            <tr>
+                                <th>Remaning video minutes</th>
+                                <!-- time comes in seconds; /60 gives minutes -->
+                                <td>{{deviceInfo.remaning_video_seconds/60}}</td>
+                            </tr>
+                            <tr>
+                                <th>Device capture mode</th>
+                                <td>{{deviceInfo.capture_mode}}</td>
+                            </tr>
+
+                            <tr>
+                                <th>File format</th>
+                                <td>Width: {{deviceInfo.fileFormat['width']}} Height: {{deviceInfo.fileFormat.height}}
+                                    Format: {{deviceInfo.fileFormat.type}}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <table id="general_table_style" name="previewAndSettingsTable">
+                        <tbody>
+                            <caption><strong>Camera settings</strong></caption>
+                            <tr>
+                                <th>
+                                    <form action="/update_camera_settings/" method="post">
+                                        <button name="updateInfo" type="submit">Refresh camera settings data</button>
+                                    </form>
+                                </th>
+                                <th>
+                                    <form action="/set_automatic_settings/" method="post">
+                                        <button name="automaticSettings" type="submit">Automatic settings</button>
+                                    </form>
+                                </th>
+                                <th>
+                                    <form action="/set_manual_settings/" method="POST" id='manual'>
+                                        
+                                        <button name="manualSetting" type="submit"
+                                            onclickonclick="document.getElementById('manual').submit();">Set camera
+                                            setting</button>
+                                </th>
+                            </tr>
+
+                            <tr>
+                                <th>ISO sensitivity </th>
+                                <td>
+                                    <select name="ISOsensitivity" id="iso">
+                                        <option selected></option>
+                                        <option value="0"> 0 (AUTO)</option>
+                                        <option value="64">64 </option>
+                                        <option value="80">80 </option>
+                                        <option value="100">100 </option>
+                                        <option value="160">160 </option>
+                                        <option value="200">200 </option>
+                                        <option value="250">250 </option>
+                                        <option value="320">320 </option>
+                                        <option value="400">400 </option>
+                                        <option value="500">500 </option>
+                                        <option value="640">640 </option>
+                                        <option value="800">800 </option>
+                                        <option value="1000">1000 </option>
+                                        <option value="1250">1250 </option>
+                                        <option value="1600">1600 </option>
+                                        <option value="2000">2000 </option>
+                                        <option value="2500">2500 </option>
+                                        <option value="3200">3200 </option>
+                                        <option value="4000">4000 </option>
+                                        <option value="5000">5000 </option>
+                                        <option value="6000">6000 </option>
+                                    </select>
+
+
+                                </td>
+                            </tr>
+                            <tr>
+                                <th>Aperture</th>
+                                <td>
+                                    <select name="aperature" id="aperture">
+                                        <option selected></option>
+
+                                        <option value="2.0">2.0 </option>
+                                        <option value="0"> 0 (AUTO)</option>
+                                    </select>
+                                </td>
+                            </tr>
+
+                            <tr>
+                                <th>Set shutter speed</th>
+                                <td>
+                                    <select name="shutterSpeed" id="shutter">
+                                        <option selected></option>
+
+                                        <option value="0"> 0 (AUTO)</option>
+                                        <option value="0.00004">1/25000 </option>
+                                        <option value="0.00005">1/20000 </option>
+                                        <option value="0.0000625">1/16000 </option>
+                                        <option value="0.00008">1/12500 </option>
+                                        <option value="0.0001">1/10000 </option>
+                                        <option value="0.000125">1/8000 </option>
+                                        <option value="0.00015625 ">1/6400 </option>
+                                        <option value="0.0002">1/5000 </option>
+                                        <option value="0.00025">1/4000 </option>
+                                        <option value="0.0003125 ">1/3200 </option>
+                                        <option value="0.0004">1/2500 </option>
+                                        <option value="0.0.0005">1/2000 </option>
+                                        <option value="0.000625">1/1600 </option>
+                                        <option value="0.0008">1/1250 </option>
+                                        <option value="0.001">1/1000 </option>
+                                        <option value="0.00125 ">1/800 </option>
+                                        <option value="0.0015625 ">1/640 </option>
+                                        <option value="0.002">1/500 </option>
+                                        <option value="0.0025">1/400 </option>
+                                        <option value="0.003125">1/320 </option>
+                                        <option value="0.004">1/250 </option>
+                                        <option value="0.005">1/200 </option>
+                                        <option value="0.00625">1/160 </option>
+                                        <option value="0.008">1/125 </option>
+                                        <option value="0.01">1/100 </option>
+                                        <option value="0.0125">1/80 </option>
+                                        <option value="0.01666666">1/60 </option>
+                                        {%if 'video'== deviceInfo.capture_mode %}
+                                        <option value="0.02">1/50 </option>
+                                        <option value="0.025">1/40</option>
+                                        <option value="0.03333333">1/30</option>
+                                        {%endif%}
+
+                                    </select>
+                                </td>
+                            </tr>
+                            </form>
+
+                            <tr>
+                                <th>Device capture mode</th>
+
+                                <td>
+                                    <form action="/set_camera_capture_mode/" method="POST" id="shootingMode">
+                                        <select name="shootingMode"
+                                            onchange="document.getElementById('shootingMode').submit();">
+                                            <option selected></option>
+
+                                            <option value="video">Video</option>
+                                            <option value="image">Image</option>
+                                        </select>
+                                    </form>
+                                </td>
+                            </tr>
+                </td>
+            </tr>
+            {%else%}
+            <tr>
+                <td colspan="4">Connect to device first</td>
+            </tr>
+            {%endif%}
+        </tbody>
+    </table>
 
 
 </body>

@@ -40,59 +40,44 @@
         <button name="backButton" type="submit">Back</button>
     </form>
 
-    <table id="general_table_style" name="connectionTable">
-        <tbody>
-            <caption><strong>Network status</strong></caption>
-            <tr>
-                <th>
-                    <strong>Current connections</strong>
-                </th>
-                <th>
-                    <strong> wifi interface :</strong> {{current_network}}
-                </th>
-                <th>
-                    <strong> ethernet interface: {{current_network}}
-                </th>
-            </tr>
-
-
-            <tr>
-                <form action="/post_credentials/" method="post">
-                    <td>camera name </td>
-                    <td>password</td>
-                    <td>
-                        <button name="submitCameraCredentials" type="submit">Submit cameraCredentials</button>
-                    </td>
-            </tr>
-            <tr>
-                <td><input name="cameraName" type="text" /> </td>
-                <td><input name="cameraPassword" type="text" /></td>
-                <td>Name: {{cameraName}} | Password: {{cameraPassword}}</td>
-                </form>
-            </tr>
-
-            <tr>
-                <td></td>
-                <td>
-                    <form action="/connect_to_ricoh/" method="post">
-                        <button name="cameraWifi" type="submit">Connect to camera Wifi</button>
-                    </form>
-                </td>
-                <td></td>
-
-            </tr>
-
-        </tbody>
-    </table>
     <br><br>
 
+    <table id="general_table_style" name="connectToRicoh">
+        <!-- Post device credentials -->
 
+        <tbody>
+            <tr>
+                <th>
+                    Name: {{cameraName}} | Password: {{cameraPassword}}
+                </th>
+                <th>Device status: {{ricoh_status}} </th>
+                <th>
+                    <form action="/connect_to_ricoh_screen/" method="post">
+                        <button name="cameraWifi" type="submit">Connect to camera Wifi</button>
+                    </form>
+                </th>
+            </tr>
+
+            </th>
+            <tr>
+                <form action="/post_credentials/" method="post">
+                    <td><input name="cameraName" type="text" /> </td>
+                    <td><input name="cameraPassword" type="text" /></td>
+                    <td> <button name="submitCameraCredentials" type="submit">Submit cameraCredentials</button>
+                    </td>
+                </form>
+            </tr>
+        </tbody>
+    </table>
+
+    <br><br>
+    <!-- Turn depth device on/off -->
     <table id="general_table_style" name="depthDeviceTable">
         <tbody>
             <caption>
                 <strong>Depth device control</strong>
             </caption>
-
+            <!-- Check if device is operational -->
             <tr>
                 <th>Depth device status</td>
                 <th>
@@ -104,7 +89,6 @@
                 </th>
                 <th></th>
             </tr>
-
             <tr>
                 <td></td>
                 <td>
@@ -121,9 +105,8 @@
             </tr>
         </tbody>
     </table>
-
     <br><br>
-
+    <!-- Turn detection on/off -->
     <table id="general_table_style" name="detectorControlTable">
         <tbody>
             <tr>
@@ -131,7 +114,6 @@
                 <th>Detection enabled: {{detector_enabled}}</th>
                 <th></th>
             </tr>
-
             <tr>
                 <td>
                     <form action="/enable_detector_yolo/" method="post">
@@ -151,9 +133,6 @@
             </tr>
         </tbody>
     </table>
-
-
-
 </body>
 
 </html>

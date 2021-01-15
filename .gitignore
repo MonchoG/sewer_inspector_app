@@ -3,3 +3,5 @@
 *.json
 *.txt
 **/__pycache__
+*.mp4
+*.jpg
