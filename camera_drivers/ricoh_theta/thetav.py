@@ -4,6 +4,7 @@ from requests.auth import HTTPDigestAuth
 import time
 # This is required if executing main
 
+
 if __name__ == "__main__":
     from ricoh_models.ricoh_media_file import MediaFile
     from ricoh_models.ricoh_device_state import RicohState
@@ -22,9 +23,13 @@ class RicohTheta:
         self.base_url = 'http://192.168.1.1'
         self.device_id = device_id
         self.device_password = device_password
-
+        self.captureStatus = 'idle'  # default
         device_state = self.get_device_state()
         device_option = self.get_device_options()
+
+        # Grab shooting status ## shooting | idle means no recording
+        self.captureStatus = device_state["state"]["_captureStatus"]
+
         # set device storage prop for easy access
         self.storage_uri = device_state["state"]["storageUri"]
 
@@ -35,9 +40,12 @@ class RicohTheta:
         remaining_video_seconds = device_option["results"]["options"]["remainingVideoSeconds"]
         # set device state
         self.ricohState = RicohState(
-            battery_level, storage_left, capture_mode, file_format, remaining_video_seconds)
+            battery_level,self.captureStatus, storage_left, capture_mode, file_format, remaining_video_seconds)
         # last recorded vid
         self.last_video = None
+
+        # Flag
+        self.last_command_id = None
 
     def update_ricoh_state(self):
         device_state = self.get_device_state()
@@ -45,6 +53,7 @@ class RicohTheta:
         # set device storage prop for easy access
         self.storage_uri = device_state["state"]["storageUri"]
 
+        captureState = device_state["state"]["_captureStatus"]
         battery_level = device_state["state"]["batteryLevel"]
         storage_left = device_option["results"]["options"]["remainingSpace"]
         capture_mode = device_option["results"]["options"]["captureMode"]
@@ -53,7 +62,7 @@ class RicohTheta:
 
         # set device state
         self.ricohState = self.ricohState.update_state(
-            battery_level, storage_left, capture_mode, file_format, remaining_video_seconds)
+            battery_level,captureState, storage_left, capture_mode, file_format, remaining_video_seconds)
 
     # Base url is the ip 'http://192.168.1.1'
     # path should be /path/method for ex '/osc/info'
@@ -149,13 +158,25 @@ class RicohTheta:
 
     def get_device_state(self):
         request = self.post_request("/osc/state")
-        return request.json()
+        json = request.json()
+        captureStatus = json["state"]["_captureStatus"]
+        if captureStatus == self.captureStatus:
+            print("Capture status didnt change...")
+        else:
+            print("Capture status changed...... Updating")
+            self.captureStatus = captureStatus
+        return json
 
     # Starts continuous shooting.
     # The shooting method changes according to the shooting mode (captureMode) and _mode settings.
     def start_capture(self):
         body = json.dumps({"name": "camera.startCapture"})
+        #
+        self.last_command_id = "camera.startCapture"
+        #
         request = self.post_request("/osc/commands/execute", body)
+        print(request.json())
+        self.update_ricoh_state()
         return request.json()
 
     # Stops continuous shooting.
@@ -165,11 +186,16 @@ class RicohTheta:
     # returns the response from the stopCapture command.
     def stop_capture(self, withDownload=False):
         body = json.dumps({"name": "camera.stopCapture"})
+        #
+        self.last_command_id = "camera.stopCapture"
+        #
         request = self.post_request("/osc/commands/execute", body)
         json_response = request.json()
         self.last_video = json_response["results"]["fileUrls"]
         if withDownload:
             self.download_files(json_response["results"]["fileUrls"])
+
+        self.update_ricoh_state()
 
         return json_response
 
@@ -249,11 +275,21 @@ if __name__ == "__main__":
     slw_cam = 'THETAYL00160236'
     slw_cam_pass = '00160236'
 
-    ricoh = RicohTheta(slw_cam, slw_cam_pass)
-    print(ricoh.ricohState.capture_mode)
-    ricoh.set_device_imageMode()
-    ricoh.update_ricoh_state()
-    print(ricoh.ricohState.capture_mode)
+    ricoh = RicohTheta(new_cam, new_cam_pass)
+    # print(ricoh.ricohState.capture_mode)
+    # ricoh.set_device_imageMode()
+    # ricoh.update_ricoh_state()
+    # print(ricoh.ricohState.capture_mode)
+
+    print(ricoh.get_device_state())
+
+    ricoh.start_capture()
+    print(ricoh.get_device_state())
+    time.sleep(1)
+    print(ricoh.get_device_state())
+    time.sleep(3)
+    ricoh.stop_capture()
+    print(ricoh.get_device_state())
 
     # ricoh_options = ricoh.get_device_options()
     # print("Options: {}".format(pretty_response(ricoh_options)))

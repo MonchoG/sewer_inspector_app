@@ -21,6 +21,8 @@ from detectors.yolo_detector.yolo import Yolo
 from detectors.mask_rcnn.mrcnn import MRCNN
 import cv2
 import time
+import pyrealsense2 as rs
+
 
 # might not be neede
 from camera import VideoCamera
@@ -208,7 +210,7 @@ def enable_detector_yolo():
 
 @ app.route("/enable_detector_mrcnn/", methods=['POST'])
 def enable_detector_mrcnn():
-    global enable_detection, detector,use_cuda
+    global enable_detection, detector, use_cuda
 
     detector = MRCNN(use_cuda=use_cuda)
 
@@ -381,8 +383,11 @@ def connect_ricoh():
 
         # Enabling 360 camera
         if not (cameraName and cameraPassword):
-            cameraName = 'THETAYL00160236'
-            cameraPassword = '00160236'
+            # cameraName = 'THETAYL00160236'
+            # cameraPassword = '00160236'
+            # new cam
+            cameraName = 'THETAYL00248307'
+            cameraPassword = '00248307'
 
         ricoh = ricoh_camera(cameraName, cameraPassword)
         print(ricoh.get_device_options())
@@ -498,6 +503,42 @@ def gen_realsense_feed():
                             detections_results.extend(detections)
                 except Exception as e:
                     print("exception in detection")
+                # Calculate the distance infront of camera
+                if depth_frame and camera.depth_scale:
+                    try:
+                        col_center = (0, 255, 0)
+                        height, width, channels = color_image.shape
+                        upper_left = ((width // 4) + 200, (height // 4))
+                        bottom_right = ((width * 3 // 4) - 200,
+                                        (height * 3 // 4) + 100)
+                        # draw in the image
+
+                        cv2.rectangle(color_image, upper_left, bottom_right,
+                                      col_center, thickness=1)
+
+                        cx = int(
+                            (upper_left[0] + (bottom_right[0] - upper_left[0])*0.5))
+                        cy = int(
+                            (upper_left[1] + (bottom_right[1] - upper_left[1])*0.5))
+
+                        # add dot at center
+                        cv2.circle(color_image, (cx, cy),
+                                   radius=3, color=col_center, thickness=3)
+                        dist = depth_frame.get_distance(int(cx), int(cy))
+                        if dist:
+                            text = ''
+                            if float(dist) <= 0.35:
+                                text = 'Distance to ROI  {:.4f}m ! There is something close to camera'.format(
+                                    dist)
+                            else:
+                                text = 'Distance to ROI  {:.4f}m'.format(dist)
+                            cv2.putText(color_image, text, (upper_left[0], upper_left[1] - 5), cv2.FONT_HERSHEY_SIMPLEX,
+                                        0.5, col_center, 2)
+                    except Exception as e:
+                        # if cant compute distance skip
+                        continue
+                    # end calculate distance
+
 #               # encode and return
                 ret, jpg = cv2.imencode('.jpg', color_image)
                 yield (b'--frame\r\n'
