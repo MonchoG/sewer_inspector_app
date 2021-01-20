@@ -71,8 +71,9 @@ ricoh = None
 ricoh_state = "Not connected"
 show_ricoh_preview = False
 # detector flags
-enable_detection = "OFF"
+enable_detection = False
 detector = None
+enabled_detector = ''
 
 # depth camera params
 # TODO make the streams selectable from setting
@@ -140,8 +141,8 @@ def render_ricoh_view(media_files=None):
 # Navigate to settingds
 @ app.route('/settings/')
 def render_settings_view():
-    global realsense_enabled, cameraName, cameraPassword
-    return render_template('settings_screen.html', ricoh_status=ricoh_state, cameraName=cameraName, cameraPassword=cameraPassword, illumination_status=illumination, realsense_device_status=realsense_enabled, detector_enabled=enable_detection)
+    global realsense_enabled, cameraName, cameraPassword, enabled_detector
+    return render_template('settings_screen.html', ricoh_status=ricoh_state, cameraName=cameraName, cameraPassword=cameraPassword, illumination_status=illumination, realsense_device_status=realsense_enabled, detector_enabled=enabled_detector)
 
 
 # Turn illumination on
@@ -202,13 +203,13 @@ def stop_realsense_camera():
 
 @ app.route("/enable_detector_yolo/", methods=['POST'])
 def enable_detector_yolo():
-    global enable_detection, detector, use_cuda
+    global enabled_detector, enable_detection, detector, use_cuda
     if not enable_detection:
         enable_detection = True
 
     detector = Yolo(confidence_param=0.3, thresh_param=0.5, use_cuda=use_cuda)
     if detector is not None:
-        enable_detection = "Yolo detector"
+        enabled_detector = "Yolo4 tiny detector"
     return render_settings_view()
 
 # Load mask rcnn detector
@@ -217,12 +218,12 @@ def enable_detector_yolo():
 
 @ app.route("/enable_detector_mrcnn/", methods=['POST'])
 def enable_detector_mrcnn():
-    global enable_detection, detector, use_cuda
+    global enabled_detector,enable_detection, detector, use_cuda
 
     detector = MRCNN(use_cuda=use_cuda)
 
     if detector is not None:
-        enable_detection = "Mask RCNN"
+        enabled_detector = "Mask RCNN"
 
     return render_settings_view()
 
@@ -232,13 +233,14 @@ def enable_detector_mrcnn():
 
 @ app.route("/disable_detector/", methods=['POST'])
 def disable_detector():
-    global enable_detection, detector
+    global enable_detector,enable_detection, detector
 
     detector = None
 
     if detector is None:
         print("Detector stopped...")
-        enable_detection = "OFF"
+        enable_detection = False
+        enable_detector = ''
 
     return render_settings_view()
 
@@ -302,10 +304,11 @@ def stop_capture():
 
 @ app.route("/start/", methods=['POST'])
 def start_capture():
-    global start_time, elapsed_time, ricoh, detections_results
+    global start_time, elapsed_time, ricoh, detections_results, distance
     detections_results = []
     elapsed_time = None
     start_time = time.time()
+    distance = 0
     if ricoh:
         response_start = ricoh.start_capture()
     else:
@@ -510,39 +513,34 @@ def gen_realsense_feed():
                     norm_gyro = np.sqrt(
                         np.power(gyroscope_x, 2) + np.power(gyroscope_y, 2)+np.power(gyroscope_z, 2))  # || gives norm
 
-                    # add gyro somehow...
-                    if len(norm_avgs) == 1500:
-                        norm_avg = sum(norm_avgs) / len(norm_avgs)
-                    if len(norm_avgs) <= 1500:
+                    if len(norm_avgs) <= 10000:
                         norm_avgs.append(norm_accel)
-                        print(len(norm_avgs))
-
-                    elif len(norm_avgs) > 1500:
-                        # what is this math...
-                        newX = math.acos(acceleration_x / norm_accel)
-                        newY = math.acos(acceleration_y / norm_accel)
-                        newZ = math.acos(acceleration_z / norm_accel)
-                        # first loop
-                        if firstAccel:
-                            firstAccel = False
-                            x = newX
-                            y = newY
-                            z = newZ
-                        else:
-                            # update values
-                            last_z = z
-                            x = x * 0.98 + newX * 0.002
-                            y = y * 0.98 + newY * 0.002
-                            z = z * 0.98 + newZ * 0.002
-                            delta_t = current_time - last_time
-                        if norm_avg != 0:
-                            curr_accel = abs(norm_accel - norm_avg)
-                            if curr_accel >= 0.1:
-                                # when changed to * 0.25 which is 250 fps / 1000 which is 0.25 frames per ms distance on X was relatively ok, when moving only on Z axis otherwise it gets noisy
-                                # delta_t is the actual time frame difference
-                                distance += last_z + (z * delta_t * delta_t)/2
-                            print("Dist {} || Current acceleration: {} || Norm acceleration {} || Norm_avg acceleration {}".format(
-                                distance, curr_accel, norm_accel, norm_avg))
+                        norm_avg = sum(norm_avgs) / len(norm_avgs)
+            
+                    newX = math.acos(acceleration_x / norm_accel)
+                    newY = math.acos(acceleration_y / norm_accel)
+                    newZ = math.acos(acceleration_z / norm_accel)
+                    # first loop
+                    if firstAccel:
+                        firstAccel = False
+                        x = newX
+                        y = newY
+                        z = newZ
+                    else:
+                        # update values
+                        last_z = z
+                        x = x * 0.98 + newX * 0.002
+                        y = y * 0.98 + newY * 0.002
+                        z = z * 0.98 + newZ * 0.002
+                        delta_t = current_time - last_time
+                    if norm_avg != 0:
+                        curr_accel = abs(norm_accel - norm_avg)
+                        if curr_accel >= 0.1:
+                            # when changed to * 0.25 which is 250 fps / 1000 which is 0.25 frames per ms distance on X was relatively ok, when moving only on Z axis otherwise it gets noisy
+                            # delta_t is the actual time frame difference
+                            distance += last_z + (z * delta_t * delta_t)/2
+                        # print("Dist {} || Current acceleration: {} || Norm acceleration {} || Norm_avg acceleration {}".format(
+                        #     distance, curr_accel, norm_accel, norm_avg))
 
                 # Hardcoded distance increase...
                 # TODO add real calculation
