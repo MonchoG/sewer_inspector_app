@@ -2,17 +2,15 @@
 
 <head>
     <title>Inspection </title>
-    <!-- Add css.. -->
-    <link rel="stylesheet" href="../templates/styles.css" />
     <!-- Calendar -->
     <script src="https://cdn.syncfusion.com/ej2/dist/ej2.min.js" type="text/javascript"></script>
-
     <link href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.syncfusion.com/ej2/material.css" rel="stylesheet">
     <!-- table styles -->
     <style>
         #general_table_style,
-        #inspection_table {
+        #inspection_table,
+        #ricoh_info_table {
             font-family: Arial, Helvetica, sans-serif;
             border-collapse: collapse;
             width: 100%;
@@ -21,23 +19,28 @@
         #general_table_style td,
         #inspection_table td,
         #general_table_style th,
-        #inspection_table th {
+        #inspection_table th,
+        #ricoh_info_table td,
+        #ricoh_info_table th {
             border: 1px solid #ddd;
             padding: 8px;
         }
 
         #general_table_style tr:nth-child(even),
-        #inspection_table tr:nth-child(even) {
+        #inspection_table tr:nth-child(even),
+        #ricoh_info_table tr:nth-child(even) {
             background-color: #f2f2f2;
         }
 
         #general_table_style tr:hover,
-        #inspection_table tr:hover {
+        #inspection_table tr:hover,
+        #ricoh_info_table tr:hover {
             background-color: #ddd;
         }
 
         #general_table_style th,
-        #inspection_table th {
+        #inspection_table th,
+        #ricoh_info_table th {
             padding-top: 12px;
             padding-bottom: 12px;
             text-align: left;
@@ -254,6 +257,46 @@
 
                 <!-- Info and control col -->
                 <td>
+                    <table id="ricoh_info_table" name="ricohInfoTable">
+                        <tbody>
+                            <caption><strong>Device info</strong></caption>
+                            {%if deviceInfo%}                            
+                            <tr>
+                                <th>Device battery level</th>
+                                <td>{{deviceInfo.battery_level}}</td>
+                            </tr>
+                            <tr>
+                                <th>Device capture status</th>
+                                <td>{{deviceInfo.captureStatus}}</td>
+                            </tr>
+                            <tr>
+                                <th>Device storage left</th>
+                                <td>{{deviceInfo.storage_left/1000000 }}</td>
+                            </tr>
+                            <tr>
+                                <th>Remaning video minutes</th>
+                                <!-- time comes in seconds; /60 gives minutes -->
+                                <td>{{deviceInfo.remaning_video_seconds/60}}</td>
+                            </tr>
+                            <tr>
+                                <th>Device capture mode</th>
+                                <td>{{deviceInfo.capture_mode}}</td>
+                            </tr>
+
+                            <tr>
+                                <th>File format</th>
+                                <td>Width: {{deviceInfo.fileFormat['width']}} Height: {{deviceInfo.fileFormat.height}}
+                                    Format: {{deviceInfo.fileFormat.type}}</td>
+                            </tr>
+                            {%else%}
+                            <tr>
+                                <td colspan="4">Connect to Ricoh device first</td>
+                            </tr>
+                            {%endif%}
+                        </tbody>
+                    </table>
+
+
                     <table id="general_table_style" name="controlWindow">
                         <tbody>
                             <tr>
@@ -325,7 +368,6 @@
                             </tbody>
                         </table>
                     </div>
-
                 </td>
             </tr>
         </table>
@@ -340,35 +382,46 @@
             // Get detection data
             var baseUrl = window.location.protocol + "//" + window.location.host + "/" + "data";
             let response = await (await fetch(baseUrl)).text();
-            console.log('response: ' + baseUrl);
             let data = JSON.parse('' + response + '');
+            console.log(data)
+            // //Handle ricoh data
+            if (data[0].length > 0) {
+                var ricoh_table = document.getElementById("ricoh_info_table");        
+                var parsed_ricohData = JSON.parse(data[0]);
+                // populate with ricoh data
+                var battery_level= ricoh_table.rows[0].cells.item(1);
+                battery_level.innerHTML = parsed_ricohData.battery_level;
+                var capture_status= ricoh_table.rows[1].cells.item(1);
+                capture_status.innerHTML = parsed_ricohData.captureStatus;
+                var deviceStorageLeft = ricoh_table.rows[2].cells.item(1);
+                deviceStorageLeft.innerHTML = parsed_ricohData.storage_left/1000000;
+                var remaning_video_seconds= ricoh_table.rows[3].cells.item(1);
+                remaning_video_seconds.innerHTML = (parsed_ricohData.remaning_video_seconds/60);
+                var capture_mode= ricoh_table.rows[4].cells.item(1);
+                capture_mode.innerHTML = parsed_ricohData.capture_mode;
+                var fileFormat= ricoh_table.rows[5].cells.item(1);
+                fileFormat.innerHTML = 'Width:' + parsed_ricohData.fileFormat.width + ' Height:' + parsed_ricohData.fileFormat.height + ' Format:' + parsed_ricohData.fileFormat.type;
+            }
+            // // end ricoh data table
 
+            // Handle detection data
             var table = document.getElementById("inspection_table");
             // Clear table data
             for (var i = 2; i < table.rows.length; i++) {
                 table.deleteRow(i);
             }
 
-            // populate with data
-            for (var j = 2; j < data.length; j++) {
-                var parsedData = JSON.parse(data[j])
+            // populate with detection data
+            for (var j = 2; j < data[1].length; j++) {
+                var parsedData = JSON.parse(data[1][j]);
                 var row = table.insertRow(j);
-                // var cell1 = row.insertCell(0);
-                var cell2 = row.insertCell(0);
-                var cell3 = row.insertCell(1);
-                var cell4 = row.insertCell(2);
-                // Uncomment to add indexing and current time.
-                // var cell5 = row.insertCell(4);
+                var cell1 = row.insertCell(0);
+                var cell2 = row.insertCell(1);
+                var cell3 = row.insertCell(2);
 
-                // cell1.innerHTML = j;
-
-                // var today = new Date();
-                // var time = today.getHours() + ":" + today.getMinutes() + ":" + today.getSeconds();
-                // cell5.innerHTML = time;
-
-                cell2.innerHTML = parsedData.type;
-                cell3.innerHTML = parsedData.location;
-                cell4.innerHTML = parsedData.time_from_start;
+                cell1.innerHTML = parsedData.type;
+                cell2.innerHTML = parsedData.location;
+                cell3.innerHTML = parsedData.time_from_start;
                 // Get the latest date and time and update the labels
                 if (j == 2) {
                     var travel_time = document.getElementById("travel_time");
@@ -381,8 +434,7 @@
                     detectionCount.innerText = data.length;
                 }
             }
-
-            // Call the function every 7.5 seconds
+            // Call the function every 1 second
             // TODO add option to set refresh rate..
             setTimeout(pollData, 1000);
         }

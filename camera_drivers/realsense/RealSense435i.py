@@ -7,6 +7,7 @@ import logging
 
 import numpy as np
 import pyrealsense2 as rs
+import math
 
 #
 # The Realsense D435 will not output images with arbitrarily chosen dimensions.
@@ -18,6 +19,7 @@ import pyrealsense2 as rs
 WIDTH = 848
 HEIGHT = 480
 CHANNELS = 3
+
 
 class RealSense435i:
     def __init__(self, width=WIDTH, height=HEIGHT, channels=CHANNELS, enable_rgb=True, enable_depth=True, enable_imu=False, device_id=None):
@@ -62,10 +64,12 @@ class RealSense435i:
                 config.enable_device(self.device_id)
 
             if self.enable_depth:
-                config.enable_stream(rs.stream.depth, 1280, 720, rs.format.z16, 30) # depth
+                config.enable_stream(rs.stream.depth, 1280,
+                                     720, rs.format.z16, 30)  # depth
 
             if self.enable_rgb:
-                config.enable_stream(rs.stream.color, 1280, 720, rs.format.bgr8, 30) # rgb
+                config.enable_stream(rs.stream.color, 1280,
+                                     720, rs.format.bgr8, 30)  # rgb
 
             # Start streaming
             profile = self.pipeline.start(config)
@@ -91,8 +95,10 @@ class RealSense435i:
         # initialize frame state
         self.color_image = None
         self.depth_image = None
-        #added
+        # added
         self.depth_frame = None
+        # this is used to store the distance to the center pixel in the ROI BB ( Obstacle detection...)
+        self.roi_distance = None
         #
         self.acceleration_x = None
         self.acceleration_y = None
@@ -100,6 +106,22 @@ class RealSense435i:
         self.gyroscope_x = None
         self.gyroscope_y = None
         self.gyroscope_z = None
+        ### Travel distance measurement related
+        # distance = 0.00
+        self.norm_avg = 0
+        self.norm_avgs = []
+        self.firstAccel = True
+        self.x = 0
+        self.y = 0
+        self.z = 0
+        self.last_z = 0
+        self.newX = 0
+        self.newY = 0
+        self.newZ = 0
+        
+        self.delta_travel_distance = 0
+        # end travel distance measurement
+            
         self.frame_count = 0
         self.start_time = time.time()
         self.frame_time = self.start_time
@@ -150,6 +172,9 @@ class RealSense435i:
             self.color_image = np.asanyarray(
                 color_frame.get_data(), dtype=np.uint8) if self.enable_rgb else None
 
+            # Calculate roi distance
+            self.roi_distance = self.calculate_roi_distance()
+
             if self.resize:
                 import cv2
                 if self.width != WIDTH or self.height != HEIGHT:
@@ -181,6 +206,54 @@ class RealSense435i:
                 str(self.frame_time - last_time),
                 str((self.acceleration_x, self.acceleration_y, self.acceleration_z)),
                 str((self.gyroscope_x, self.gyroscope_y, self.gyroscope_z))))
+            norm_accel = np.sqrt(np.power(
+                        acceleration.x, 2) + np.power(acceleration.y, 2)+np.power(acceleration.z, 2))  # || gives norm
+            # norm_gyro = np.sqrt(
+            #             np.power(gyroscope_x, 2) + np.power(gyroscope_y, 2)+np.power(gyroscope_z, 2))  # || gives norm
+            if len(self.norm_avgs) <= 10000:
+                self.norm_avgs.append(norm_accel)
+                self.norm_avg = sum(self.norm_avgs) / len(self.norm_avgs)
+
+            self.newX = math.acos(acceleration.x / norm_accel)
+            self.newY = math.acos(acceleration.y / norm_accel)
+            self.newZ = math.acos(acceleration.z / norm_accel)
+            # first loop
+            if self.firstAccel:
+                self.firstAccel = False
+                self.x = self.newX
+                self.y = self.newY
+                self.z = self.newZ
+            else:
+                # update values
+                self.last_z = self.z
+                self.x = self.x * 0.98 + self.newX * 0.002
+                self.y = self.y * 0.98 + self.newY * 0.002
+                self.z = self.z * 0.98 + self.newZ * 0.002
+                delta_t = self.frame_time - last_time
+            if self.norm_avg != 0:
+                curr_accel = abs(norm_accel - self.norm_avg)
+                if curr_accel >= 0.1:
+                    # when changed to * 0.25 which is 250 fps / 1000 which is 0.25 frames per ms distance on X was relatively ok, when moving only on Z axis otherwise it gets noisy
+                    # delta_t is the actual time frame difference
+                    self.delta_travel_distance = self.last_z + (self.z * delta_t * delta_t)/2
+                    
+            
+    def calculate_roi_distance(self):
+        """Calcualtes the distance to the center point of the predefined ROI in order to pefrom obstacle detection, in case detector is not able to classify object.
+        Returns:
+            float: the distance to the center pixel of the ROI
+        """
+        # Find the boudaries of the ROI BB
+        height, width, channels = self.color_image.shape
+        upper_left = ((width // 4) + 200, (height // 4))
+        bottom_right = ((width * 3 // 4) - 200,
+                        (height * 3 // 4) + 100)
+        # Find the center:
+        cx = int((upper_left[0] + (bottom_right[0] - upper_left[0])*0.5))
+        cy = int((upper_left[1] + (bottom_right[1] - upper_left[1])*0.5))
+        # Calculate distance
+        roi_distance = self.depth_frame.get_distance(int(cx), int(cy))
+        return roi_distance
 
     def update(self):
         """
@@ -197,7 +270,14 @@ class RealSense435i:
         For gyroscope, x is pitch, y is yaw and z is roll.
         :return: (rbg_image: nparray, depth_image: nparray, acceleration: (x:float, y:float, z:float), gyroscope: (x:float, y:float, z:float))
         """
-        return self.color_image, self.depth_image, self.depth_frame, self.acceleration_x, self.acceleration_y, self.acceleration_z, self.gyroscope_x, self.gyroscope_y, self.gyroscope_z
+        # original
+        #return self.color_image, self.depth_image, self.depth_frame, self.roi_distance, self.acceleration_x, self.acceleration_y, self.acceleration_z, self.gyroscope_x, self.gyroscope_y, self.gyroscope_z
+        # shortened
+        delta_distance_to_return = self.delta_travel_distance
+        # reseting delta travel distance 
+        self.delta_travel_distance = 0
+        
+        return self.color_image, self.depth_frame, delta_distance_to_return, self.roi_distance
 
     def run(self):
         """
@@ -220,7 +300,8 @@ class RealSense435i:
 #
 if __name__ == "__main__":
 
-    show_opencv_window = True # True to show images in opencv window: note that default donkeycar environment is not configured for this.
+    # True to show images in opencv window: note that default donkeycar environment is not configured for this.
+    show_opencv_window = True
     if show_opencv_window:
         import cv2
 
@@ -233,7 +314,8 @@ if __name__ == "__main__":
     height = 120
     channels = 3
 
-    profile_frames = 0 # set to non-zero to calculate the max frame rate using given number of frames
+    # set to non-zero to calculate the max frame rate using given number of frames
+    profile_frames = 0
 
     try:
         #
@@ -270,15 +352,17 @@ if __name__ == "__main__":
                 if enable_rgb or enable_depth:
                     # make sure depth and color images have same number of channels so we can show them together in the window
                     if 3 == channels:
-                        depth_colormap = cv2.applyColorMap(cv2.convertScaleAbs(depth_image, alpha=0.03), cv2.COLORMAP_JET) if enable_depth else None
+                        depth_colormap = cv2.applyColorMap(cv2.convertScaleAbs(
+                            depth_image, alpha=0.03), cv2.COLORMAP_JET) if enable_depth else None
                     else:
-                        depth_colormap = cv2.cvtColor(cv2.applyColorMap(cv2.convertScaleAbs(depth_image, alpha=0.03), cv2.COLORMAP_JET), cv2.COLOR_RGB2GRAY) if enable_depth else None
-
+                        depth_colormap = cv2.cvtColor(cv2.applyColorMap(cv2.convertScaleAbs(
+                            depth_image, alpha=0.03), cv2.COLORMAP_JET), cv2.COLOR_RGB2GRAY) if enable_depth else None
 
                     # Stack both images horizontally
                     images = None
                     if enable_rgb:
-                        images = np.hstack((color_image, depth_colormap)) if enable_depth else color_image
+                        images = np.hstack(
+                            (color_image, depth_colormap)) if enable_depth else color_image
                     elif enable_depth:
                         images = depth_colormap
 
@@ -292,7 +376,8 @@ if __name__ == "__main__":
                     break
             if profile_frames > 0:
                 if frame_count == profile_frames:
-                    print("Aquired {} frames in {} seconds for {} fps".format(str(frame_count), str(frame_time - start_time), str(frame_count / (frame_time - start_time))))
+                    print("Aquired {} frames in {} seconds for {} fps".format(str(frame_count), str(
+                        frame_time - start_time), str(frame_count / (frame_time - start_time))))
                     break
             else:
                 time.sleep(0.05)

@@ -40,7 +40,7 @@ class RicohTheta:
         remaining_video_seconds = device_option["results"]["options"]["remainingVideoSeconds"]
         # set device state
         self.ricohState = RicohState(
-            battery_level,self.captureStatus, storage_left, capture_mode, file_format, remaining_video_seconds)
+            battery_level, self.captureStatus, storage_left, capture_mode, file_format, remaining_video_seconds)
         # last recorded vid
         self.last_video = None
 
@@ -62,7 +62,8 @@ class RicohTheta:
 
         # set device state
         self.ricohState = self.ricohState.update_state(
-            battery_level,captureState, storage_left, capture_mode, file_format, remaining_video_seconds)
+            battery_level, captureState, storage_left, capture_mode, file_format, remaining_video_seconds)
+        return self.ricohState
 
     # Base url is the ip 'http://192.168.1.1'
     # path should be /path/method for ex '/osc/info'
@@ -129,14 +130,21 @@ class RicohTheta:
 
     # Calls the "/osc/commands/execute" endpoint of ricoh Api using post
     # Sets the device to video mode, the parameters can be modified according to the API and need
-    def set_manual_camera_settings(self, iso, aperature, shutterSpeed):
+    def set_manual_camera_settings(self, iso=None, aperature=None, shutterSpeed=None):
+        if not iso:
+            iso = 0
+        if not aperature:
+            aperature = 0
+        if not shutterSpeed:
+            shutterSpeed = 0
+
         body = json.dumps({"name": "camera.setOptions",
                            "parameters": {
                                "options": {
                                    "exposureProgram": 1,
-                                   "iso": iso,
-                                   "aperature": aperature,
-                                   "shutterSpeed": shutterSpeed}}})
+                                   "iso": int(iso),
+                                   "aperature": float(aperature),
+                                   "shutterSpeed":float(shutterSpeed)}}})
         request = self.post_request("/osc/commands/execute", body)
         return request.json()
      # Calls the "/osc/commands/execute" endpoint of ricoh Api using post
@@ -159,12 +167,8 @@ class RicohTheta:
     def get_device_state(self):
         request = self.post_request("/osc/state")
         json = request.json()
-        captureStatus = json["state"]["_captureStatus"]
-        if captureStatus == self.captureStatus:
-            print("Capture status didnt change...")
-        else:
-            print("Capture status changed...... Updating")
-            self.captureStatus = captureStatus
+
+        self.captureStatus = json["state"]["_captureStatus"]
         return json
 
     # Starts continuous shooting.

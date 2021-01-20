@@ -3,27 +3,33 @@
 <head>
     <title>Sewer inspector application</title>
     <style>
-        #general_table_style {
+        #general_table_style,
+        #ricoh_info_table {
             font-family: Arial, Helvetica, sans-serif;
             border-collapse: collapse;
             width: 100%;
         }
 
         #general_table_style td,
-        #general_table_style th {
+        #general_table_style th,
+        #ricoh_info_table td,
+        #ricoh_info_table th {
             border: 1px solid #ddd;
             padding: 8px;
         }
 
-        #general_table_style tr:nth-child(even) {
+        #general_table_style tr:nth-child(even),
+        #ricoh_info_table tr:nth-child(even) {
             background-color: #f2f2f2;
         }
 
-        #general_table_style tr:hover {
+        #general_table_style tr:hover,
+        #ricoh_info_table tr:hover {
             background-color: #ddd;
         }
 
-        #general_table_style th {
+        #general_table_style th,
+        #ricoh_info_table th {
             padding-top: 12px;
             padding-bottom: 12px;
             text-align: left;
@@ -35,33 +41,11 @@
 
 <body>
     <h1>Sewer inspector application</h1>
-
     <form action="/" method="GET">
         <button name="backButton" type="submit">Back</button>
     </form>
-    <!-- Connection table -->
-    <table id="general_table_style" name="connectionTable">
-        <tbody>
-            <caption><strong>Network status</strong></caption>
-            <tr>
-                <th>
-                    <strong>Current connections</strong>
-                </th>
-                <th>
-                    <strong> wifi interface :</strong> {{current_network}}
-                </th>
-                <th>
-                    <strong> ethernet interface: {{current_network}}
-                </th>
-            </tr>
-        </tbody>
-    </table>
-
-    <br><br>
-
     <table id="general_table_style" name="connectToRicoh">
         <!-- Post device credentials -->
-
         <tbody>
             <tr>
                 <th>
@@ -70,11 +54,13 @@
                 <th>Device status: {{ricoh_status}} </th>
                 <th>
                     <form action="/connect_to_ricoh_screen/" method="post">
-                        <button name="cameraWifi" type="submit">Connect to camera Wifi</button>
+                        <button name="cameraWifi" type="submit">Connect to camera</button>
+                    </form>
+                    <form action="/disconnect_ricoh/" method="post">
+                        <button name="cameraWifi" type="submit">Disconnect camera</button>
                     </form>
                 </th>
             </tr>
-
             </th>
             <tr>
                 <form action="/post_credentials/" method="post">
@@ -160,7 +146,6 @@
         </table>
     </div>
     <br><br>
-
     <table id="general_table_style" name="previewAndSettingsTable">
         <tbody>
             <caption><strong>Live preview</strong></caption>
@@ -171,16 +156,10 @@
                 </td>
 
                 <td>
-                    <table id="general_table_style" name="previewAndSettingsTable">
+                    <table id="ricoh_info_table" name="ricohInfoTable">
                         <tbody>
                             <caption><strong>Device info</strong></caption>
-                            <tr>
-                                <th colspan="2">
-                                    <form action="/update_ricoh_info/" method="post">
-                                        <button name="updateInfo" type="submit">Refresh data</button>
-                                    </form>
-                                </th>
-                            </tr>
+                            {%if deviceInfo%}
                             <tr>
                                 <th>Device battery level</th>
                                 <td>{{deviceInfo.battery_level}}</td>
@@ -208,17 +187,21 @@
                                 <td>Width: {{deviceInfo.fileFormat['width']}} Height: {{deviceInfo.fileFormat.height}}
                                     Format: {{deviceInfo.fileFormat.type}}</td>
                             </tr>
+                            {%else%}
+                            <tr>
+                                <td colspan="4">Connect to Ricoh device first</td>
+                            </tr>
+                            {%endif%}
                         </tbody>
                     </table>
+
 
                     <table id="general_table_style" name="previewAndSettingsTable">
                         <tbody>
                             <caption><strong>Camera settings</strong></caption>
                             <tr>
                                 <th>
-                                    <form action="/update_camera_settings/" method="post">
-                                        <button name="updateInfo" type="submit">Refresh camera settings data</button>
-                                    </form>
+
                                 </th>
                                 <th>
                                     <form action="/set_automatic_settings/" method="post">
@@ -347,6 +330,39 @@
         </tbody>
     </table>
 
+    <script>
+        async function pollData() {
+            // Get detection data
+            var baseUrl = window.location.protocol + "//" + window.location.host + "/" + "data";
+            let response = await (await fetch(baseUrl)).text();
+            let data = JSON.parse('' + response + '');
+            var parsed_ricohData = JSON.parse(data[0]);
+
+            // //Handle ricoh data
+            var ricoh_table = document.getElementById("ricoh_info_table");
+            console.log(ricoh_table)
+            // populate with ricoh data
+            var battery_level = ricoh_table.rows[0].cells.item(1);
+            battery_level.innerHTML = parsed_ricohData.battery_level;
+            var capture_status = ricoh_table.rows[1].cells.item(1);
+            capture_status.innerHTML = parsed_ricohData.captureStatus;
+            var deviceStorageLeft = ricoh_table.rows[2].cells.item(1);
+            deviceStorageLeft.innerHTML = parsed_ricohData.storage_left / 1000000;
+            var remaning_video_seconds = ricoh_table.rows[3].cells.item(1);
+            remaning_video_seconds.innerHTML = (parsed_ricohData.remaning_video_seconds / 60);
+            var capture_mode = ricoh_table.rows[4].cells.item(1);
+            capture_mode.innerHTML = parsed_ricohData.capture_mode;
+            var fileFormat = ricoh_table.rows[5].cells.item(1);
+            fileFormat.innerHTML = 'Width:' + parsed_ricohData.fileFormat.width + ' Height:' + parsed_ricohData.fileFormat.height + ' Format:' + parsed_ricohData.fileFormat.type;
+            // // end ricoh data table
+
+            // Call the function every 5 seconds
+            // TODO add option to set refresh rate..
+            setTimeout(pollData, 5000);
+        }
+        // start the script 
+        pollData();
+    </script>
 
 </body>
 

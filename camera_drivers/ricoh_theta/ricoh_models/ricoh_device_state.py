@@ -1,3 +1,6 @@
+import json
+
+
 class RicohState:
     def __init__(self, battery_level, captureStatus, storage_left, capture_mode, fileFormat, remaning_video_seconds):
         self.battery_level = battery_level
@@ -22,3 +25,7 @@ class RicohState:
         if remaning_video_seconds:
             self.remaning_video_seconds = remaning_video_seconds
         return self
+
+    def toJSON(self):
+        return json.dumps(self, default=lambda o: o.__dict__,
+                          sort_keys=True, indent=4)

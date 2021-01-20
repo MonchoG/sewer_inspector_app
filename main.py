@@ -13,7 +13,6 @@ from models.detection import Detection
 from models.inspection import InspectionReport
 
 # AI related
-import numpy as np
 import os
 from camera_drivers.realsense.RealSense435i import RealSense435i as depth_cam
 from camera_drivers.ricoh_theta.thetav import RicohTheta as ricoh_camera
@@ -21,20 +20,16 @@ from detectors.yolo_detector.yolo import Yolo
 from detectors.mask_rcnn.mrcnn import MRCNN
 import cv2
 import time
-import pyrealsense2 as rs
-import math
-
 
 # might not be neede
 from camera import VideoCamera
 
 import platform
 import sys
-
-# Uncomment on nano to import GPIO modules
-
-# setup illumination on nano
+#Use cuda flag - default is True; if Opencv is not build with CUDA it would delegate to CPU even if flag is True
 use_cuda = True
+# Might not need in the end....
+# setup illumination on nano
 use_gpio = False
 if str(platform.platform()).__contains__("Windows"):
     print("On windows, not importing GPIO")
@@ -46,8 +41,6 @@ else:
 
     # Pin Definitions
     output_pin = 27  # BCM 27, board 13
-    output_pin2 = 23  # BCM pin 23, BOARD pin 16
-    output_pin3 = 18  # BCN 18, board 12
     # Uncomment on nano to init gpio pins...
     GPIO.setmode(GPIO.BCM)  # BCM pin-numbering scheme from Raspberry Pi
     # # set pin as an output pin with optional initial state of LOW
@@ -56,13 +49,10 @@ else:
     # GPIO.setup(output_pin3, GPIO.OUT, initial=GPIO.LOW)
     # Ilumination
 illumination_on = False
-
 illumination = "OFF"
-
 
 # Application
 app = Flask(__name__)
-
 
 # Ricoh credentials
 cameraName = None
@@ -88,11 +78,6 @@ height = 720
 channels = 3
 # IMU distance measurement
 distance = 0.00
-norm_avg = 0
-norm_avgs = []
-firstAccel = True
-
-# End IMU distance measurement
 
 # variable to hold realsense camera obj
 camera = None
@@ -104,26 +89,24 @@ inspection_report = None
 
 # Timer
 start_time = None
-current_time = start_time
 elapsed_time = None
-
 
 # Main page
 @ app.route('/')
 def index():
     global realsense_enabled
-    return render_template('index.html', cameraName=cameraName, cameraPassword=cameraPassword, illumination_status=illumination, realsense_device_status=realsense_enabled, detector_enabled=enable_detection)
+    return render_template('index.html')
 
 
 # Navigate to inspection page
 @ app.route('/inspection/')
 def render_camera_view():
-    global realsense_enabled, detections_results, elapsed_time, distance, inspection_report
-    return render_template('inspection_screen.html', travel_distance=distance, the_inspection_time=elapsed_time, ricoh_status=ricoh_state, cameraName=cameraName, cameraPassword=cameraPassword, illumination_status=illumination, realsense_device_status=realsense_enabled, detector_enabled=enable_detection, detections=detections_results, report_details=inspection_report)
+    ricohInfo = None
+    if ricoh:
+        ricohInfo = ricoh.ricohState
+    return render_template('inspection_screen.html', travel_distance=distance, the_inspection_time=elapsed_time, ricoh_status=ricoh_state, cameraName=cameraName, cameraPassword=cameraPassword, illumination_status=illumination, realsense_device_status=realsense_enabled, detector_enabled=enable_detection, detections=detections_results, report_details=inspection_report, deviceInfo=ricohInfo)
 
 # Navigate to ricoh page
-
-
 @ app.route('/ricoh/')
 def render_ricoh_view(media_files=None):
     global ricoh, ricoh_state, cameraName, cameraPassword
@@ -141,14 +124,12 @@ def render_ricoh_view(media_files=None):
 # Navigate to settingds
 @ app.route('/settings/')
 def render_settings_view():
-    global realsense_enabled, cameraName, cameraPassword, enabled_detector
     return render_template('settings_screen.html', ricoh_status=ricoh_state, cameraName=cameraName, cameraPassword=cameraPassword, illumination_status=illumination, realsense_device_status=realsense_enabled, detector_enabled=enabled_detector)
 
 
 # Turn illumination on
 @ app.route("/illumination_on/", methods=['POST'])
 def illumination_on():
-    # uncomment on nano
     global output_pin, curr_value, illumination
     if use_gpio:
         curr_value = GPIO.HIGH
@@ -218,7 +199,7 @@ def enable_detector_yolo():
 
 @ app.route("/enable_detector_mrcnn/", methods=['POST'])
 def enable_detector_mrcnn():
-    global enabled_detector,enable_detection, detector, use_cuda
+    global enabled_detector, enable_detection, detector, use_cuda
 
     detector = MRCNN(use_cuda=use_cuda)
 
@@ -233,7 +214,7 @@ def enable_detector_mrcnn():
 
 @ app.route("/disable_detector/", methods=['POST'])
 def disable_detector():
-    global enable_detector,enable_detection, detector
+    global enable_detector, enable_detection, detector
 
     detector = None
 
@@ -289,10 +270,11 @@ def create_report():
 @ app.route("/stop/", methods=['POST'])
 def stop_capture():
     global ricoh, start_time, elapsed_time
-    elapsed_time = time.time() - start_time
+    if start_time:
+        elapsed_time = time.time() - start_time
     start_time = None
     if ricoh:
-        response_stop = ricoh.stop_capture(withDownload=False)
+        ricoh.stop_capture(withDownload=False)
     else:
         print("Ricoh device not active")
 
@@ -306,11 +288,11 @@ def stop_capture():
 def start_capture():
     global start_time, elapsed_time, ricoh, detections_results, distance
     detections_results = []
-    elapsed_time = None
-    start_time = time.time()
     distance = 0
     if ricoh:
-        response_start = ricoh.start_capture()
+        ricoh.start_capture()
+        elapsed_time = None
+        start_time = time.time()
     else:
         print("Ricoh device not active")
     return render_camera_view()
@@ -413,18 +395,18 @@ def connect_ricoh():
     else:
         return render_ricoh_view()
 
-# Method to update ricoh state
+# Disable ricoh...
 
 
-@ app.route("/update_ricoh_info/", methods=['GET', 'POST'])
-def get_ricoh_info():
+@ app.route("/disconnect_ricoh/", methods=['GET', 'POST'])
+def disconnect_ricoh():
     global ricoh
-    if ricoh:
-        ricoh.update_ricoh_state()
+    ricoh = None
     return render_ricoh_view()
 
-
 # Changes camera mode(video/image shooting)
+
+
 @ app.route("/set_camera_capture_mode/", methods=['GET', 'POST'])
 def set_camera_capture_mode():
     global ricoh
@@ -445,7 +427,7 @@ def set_manual_settings():
     shutter = request.form['shutterSpeed']
     aperature = request.form['aperature']
     ricoh.set_manual_camera_settings(
-        int(iso), float(aperature), float(shutter))
+        iso, aperature, shutter)
     return render_ricoh_view()
 
 
@@ -463,14 +445,26 @@ def set_automatic_settings():
 
 @ app.route('/data', methods=["GET", "POST"])
 def update_table():
-    global detections_results
+    global detections_results, ricoh
     data = []
+    ricoh_data = []
+    # get ricoh state
+    ricohInfo = None
+    if ricoh:
+        ricoh.ricohState = ricoh.update_ricoh_state()
+        ricohInfo = ricoh.ricohState
+        ricoh_data.append(ricohInfo.toJSON())
+    # append to data as separate json 'list'
+    data.append(ricoh_data)
 
+    detection_data = []
     for detect in reversed(detections_results):
-        data.append(detect.toJSON())
+        detection_data.append(detect.toJSON())
 
-        if len(data) == 25:
+        if len(detection_data) == 25:
             break
+
+    data.append(detection_data)
 
     response = make_response(json.dumps(data))
     response.content_type = 'application/json'
@@ -488,106 +482,56 @@ def video_feed():
 
 
 def gen_realsense_feed():
-    global realsense_enabled, camera, enable_imu, enable_detection, detector, detections_results, start_time, current_time, elapsed_time, distance,norm_avg,norm_avgs,firstAccel
-    # IMU relate
-    x = 0
-    y = 0
-    z = 0
-    newX = 0
-    newY = 0
-    newZ = 0
-
+    global realsense_enabled, camera, enable_imu, enable_detection, detector, detections_results, start_time, elapsed_time, distance, norm_avg, norm_avgs, firstAccel
     if realsense_enabled:
         while realsense_enabled:
-            last_time = current_time
-            current_time = time.time()
             if start_time:
-                elapsed_time = current_time - start_time
+                elapsed_time = time.time() - start_time
 
             if camera:
-                color_image, depth_image, depth_frame, acceleration_x, acceleration_y, acceleration_z, gyroscope_x, gyroscope_y, gyroscope_z = camera.run()
-
+                color_image, depth_frame, delta_travel_distance, roi_distance = camera.run()
                 if enable_imu:
-                    norm_accel = np.sqrt(np.power(
-                        acceleration_x, 2) + np.power(acceleration_y, 2)+np.power(acceleration_z, 2))  # || gives norm
-                    norm_gyro = np.sqrt(
-                        np.power(gyroscope_x, 2) + np.power(gyroscope_y, 2)+np.power(gyroscope_z, 2))  # || gives norm
-
-                    if len(norm_avgs) <= 10000:
-                        norm_avgs.append(norm_accel)
-                        norm_avg = sum(norm_avgs) / len(norm_avgs)
-            
-                    newX = math.acos(acceleration_x / norm_accel)
-                    newY = math.acos(acceleration_y / norm_accel)
-                    newZ = math.acos(acceleration_z / norm_accel)
-                    # first loop
-                    if firstAccel:
-                        firstAccel = False
-                        x = newX
-                        y = newY
-                        z = newZ
-                    else:
-                        # update values
-                        last_z = z
-                        x = x * 0.98 + newX * 0.002
-                        y = y * 0.98 + newY * 0.002
-                        z = z * 0.98 + newZ * 0.002
-                        delta_t = current_time - last_time
-                    if norm_avg != 0:
-                        curr_accel = abs(norm_accel - norm_avg)
-                        if curr_accel >= 0.1:
-                            # when changed to * 0.25 which is 250 fps / 1000 which is 0.25 frames per ms distance on X was relatively ok, when moving only on Z axis otherwise it gets noisy
-                            # delta_t is the actual time frame difference
-                            distance += last_z + (z * delta_t * delta_t)/2
-                        # print("Dist {} || Current acceleration: {} || Norm acceleration {} || Norm_avg acceleration {}".format(
-                        #     distance, curr_accel, norm_accel, norm_avg))
-
-                # Hardcoded distance increase...
-                # TODO add real calculation
-                #distance += 0.001
-                ##
+                    distance += delta_travel_distance
                 try:
                     if enable_detection:
                         detection = detector.detect(color_image)
                         if detection:
                             color_image, detections = detector.draw_results(
                                 detection, color_image, depth_frame, camera.depth_scale, travel_distance=distance, elapsed_time=elapsed_time)
-
                             # Append the results to the entire list with detection results
                             detections_results.extend(detections)
                 except Exception as e:
-                    print("exception in detection")
+                    print("exception in detection {}".format(e))
                 # Calculate the distance infront of camera
                 if depth_frame and camera.depth_scale:
+                    # Drawing ROI for obstacle detection
                     try:
                         col_center = (0, 255, 0)
                         height, width, channels = color_image.shape
                         upper_left = ((width // 4) + 200, (height // 4))
                         bottom_right = ((width * 3 // 4) - 200,
                                         (height * 3 // 4) + 100)
-                        # draw in the image
-
+                        # draw in the image a BB and Dot at its center, to which distance is measured
                         cv2.rectangle(color_image, upper_left, bottom_right,
                                       col_center, thickness=1)
-
+                        # Find center
                         cx = int(
                             (upper_left[0] + (bottom_right[0] - upper_left[0])*0.5))
                         cy = int(
                             (upper_left[1] + (bottom_right[1] - upper_left[1])*0.5))
-
                         # add dot at center
                         cv2.circle(color_image, (cx, cy),
                                    radius=3, color=col_center, thickness=3)
-                        dist = depth_frame.get_distance(int(cx), int(cy))
-                        if dist:
-                            text = ''
-                            if float(dist) <= 0.35:
+                        text = 'Could not compute distance to ROI..'
+                        # If there was succesful distance measurement from Realsense, add label with distance
+                        if roi_distance:
+                            text = 'Distance to ROI  {:.4f}m'.format(
+                                roi_distance)
+                            if float(roi_distance) <= 0.5:
                                 text = 'Distance to ROI  {:.4f}m ! There is something close to camera'.format(
-                                    dist)
-                            else:
-                                text = 'Distance to ROI  {:.4f}m'.format(dist)
-                            cv2.putText(color_image, text, (upper_left[0], upper_left[1] - 5), cv2.FONT_HERSHEY_SIMPLEX,
-                                        0.5, col_center, 2)
+                                    roi_distance)
+                        cv2.putText(color_image, text, (upper_left[0], upper_left[1] - 5), cv2.FONT_HERSHEY_SIMPLEX,
+                                    0.5, col_center, 2)
                     except Exception as e:
                         # if cant compute distance skip
                         continue
