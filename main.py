@@ -22,6 +22,7 @@ from detectors.mask_rcnn.mrcnn import MRCNN
 import cv2
 import time
 import pyrealsense2 as rs
+import math
 
 
 # might not be neede
@@ -78,14 +79,20 @@ detector = None
 realsense_enabled = False
 enable_rgb = True
 enable_depth = True
-enable_imu = False
+enable_imu = True
+# variable to hold travel distance
 device_id = None
 width = 1280
 height = 720
 channels = 3
-
-# variable to hold travel distance
+# IMU distance measurement
 distance = 0.00
+norm_avg = 0
+norm_avgs = []
+firstAccel = True
+
+# End IMU distance measurement
+
 # variable to hold realsense camera obj
 camera = None
 
@@ -379,7 +386,7 @@ def connect_ricoh():
         # Connect to device Wifi AP
         # os.system(
         #     "nmcli d wifi connect {} password {} iface {}"
-        #     .format("THETAYL00160236.OSC", "00160236", "wlp8s0"))
+        #     .format("THETAYL00160236.OSC", "00160236", "wlan0"))
 
         # Enabling 360 camera
         if not (cameraName and cameraPassword):
@@ -478,19 +485,68 @@ def video_feed():
 
 
 def gen_realsense_feed():
-    global realsense_enabled, camera, enable_detection, detector, detections_results, start_time, current_time, elapsed_time, distance
+    global realsense_enabled, camera, enable_imu, enable_detection, detector, detections_results, start_time, current_time, elapsed_time, distance,norm_avg,norm_avgs,firstAccel
+    # IMU relate
+    x = 0
+    y = 0
+    z = 0
+    newX = 0
+    newY = 0
+    newZ = 0
 
     if realsense_enabled:
         while realsense_enabled:
+            last_time = current_time
+            current_time = time.time()
             if start_time:
-                last_time = current_time
-                current_time = time.time()
                 elapsed_time = current_time - start_time
+
             if camera:
                 color_image, depth_image, depth_frame, acceleration_x, acceleration_y, acceleration_z, gyroscope_x, gyroscope_y, gyroscope_z = camera.run()
+
+                if enable_imu:
+                    norm_accel = np.sqrt(np.power(
+                        acceleration_x, 2) + np.power(acceleration_y, 2)+np.power(acceleration_z, 2))  # || gives norm
+                    norm_gyro = np.sqrt(
+                        np.power(gyroscope_x, 2) + np.power(gyroscope_y, 2)+np.power(gyroscope_z, 2))  # || gives norm
+
+                    # add gyro somehow...
+                    if len(norm_avgs) == 1500:
+                        norm_avg = sum(norm_avgs) / len(norm_avgs)
+                    if len(norm_avgs) <= 1500:
+                        norm_avgs.append(norm_accel)
+                        print(len(norm_avgs))
+
+                    elif len(norm_avgs) > 1500:
+                        # what is this math...
+                        newX = math.acos(acceleration_x / norm_accel)
+                        newY = math.acos(acceleration_y / norm_accel)
+                        newZ = math.acos(acceleration_z / norm_accel)
+                        # first loop
+                        if firstAccel:
+                            firstAccel = False
+                            x = newX
+                            y = newY
+                            z = newZ
+                        else:
+                            # update values
+                            last_z = z
+                            x = x * 0.98 + newX * 0.002
+                            y = y * 0.98 + newY * 0.002
+                            z = z * 0.98 + newZ * 0.002
+                            delta_t = current_time - last_time
+                        if norm_avg != 0:
+                            curr_accel = abs(norm_accel - norm_avg)
+                            if curr_accel >= 0.1:
+                                # when changed to * 0.25 which is 250 fps / 1000 which is 0.25 frames per ms distance on X was relatively ok, when moving only on Z axis otherwise it gets noisy
+                                # delta_t is the actual time frame difference
+                                distance += last_z + (z * delta_t * delta_t)/2
+                            print("Dist {} || Current acceleration: {} || Norm acceleration {} || Norm_avg acceleration {}".format(
+                                distance, curr_accel, norm_accel, norm_avg))
+
                 # Hardcoded distance increase...
                 # TODO add real calculation
-                distance += 0.001
+                #distance += 0.001
                 ##
                 try:
                     if enable_detection:
@@ -537,7 +593,8 @@ def gen_realsense_feed():
                     except Exception as e:
                         # if cant compute distance skip
                         continue
-                    # end calculate distance
+                    # end calculate distance to ROI
+
 
 #               # encode and return
                 ret, jpg = cv2.imencode('.jpg', color_image)

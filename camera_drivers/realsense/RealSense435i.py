@@ -44,7 +44,7 @@ class RealSense435i:
             if None != self.device_id:
                 imu_config.enable_device(self.device_id)
             imu_config.enable_stream(
-                rs.stream.accel, rs.format.motion_xyz32f, 63)  # acceleration
+                rs.stream.accel, rs.format.motion_xyz32f, 250)  # acceleration
             imu_config.enable_stream(
                 rs.stream.gyro, rs.format.motion_xyz32f, 200)  # gyroscope
             imu_profile = self.imu_pipeline.start(imu_config)

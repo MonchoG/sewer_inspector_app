@@ -28,19 +28,19 @@ The project consists of the following :
          1. For PC refer to Opencv documentation - [link](https://docs.opencv.org/master/d7/d9f/tutorial_linux_install.html)
          2. For jetson nano I used script - [link](https://github.com/mdegans/nano_build_opencv)
             - Check if Opencv version satisfies - I updated to 4.4.0
-            - Add this CMAKE flag  -D PYTHON3_EXECUTABLE=path/to/python3 (can give =$(which python3) to find path to python, if not known)
-            - Add this CMAKE flag -D WITH_OPENCV_DNN_CUDA=ON
-            - Add this CMAKE flag -D OPENCV_DNN_CUDA=ON
+            - Add this CMAKE flag -DPYTHON3_EXECUTABLE=path/to/python3 (can give =$(which python3) to find path to python, if not known)
+            - Add this CMAKE flag -DWITH_OPENCV_DNN_CUDA=ON
+            - Add this CMAKE flag -DOPENCV_DNN_CUDA=ON
    2. Realsense SDK with Python bindings
       1. On windows:
       2. On Jetson nano:
          1. To install realsense sdk with python bindings i used [this](https://github.com/JetsonHacksNano/installLibrealsense) script
             - Depending on the Jetson image that is installed on the SD card you migth need to update the path to CUDA (For JetPack 4.4 i needed to change to CUDA version 10.2)
             - Open the buildLibrealsense script and change:
+              - Update the Realsense sdk version to 2.32.1 - with this version I was able to run the IMU stream alongside the Depth and RGB streams.
               - path to cuda - for jetson updating the path to the correct version is enough
               - Add this CMAKE flag  -D PYTHON3_EXECUTABLE=path/to/python3 (can give =$(which python3) to find path to python, if not known)
     3. The rest of the required modules can be installed via pip, if they are not already available within your python environment. 
-
 
 # Contents
 ## Camera drivers

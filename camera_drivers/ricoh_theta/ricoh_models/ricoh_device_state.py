@@ -3,7 +3,7 @@ class RicohState:
         self.battery_level = battery_level
         self.captureStatus = captureStatus
 
-        self.storage_left =  storage_left
+        self.storage_left = storage_left
         self.capture_mode = capture_mode
         self.fileFormat = fileFormat
         self.remaning_video_seconds = remaning_video_seconds
