@@ -1,17 +1,14 @@
-# main.py
-
 # application related
+import platform
+import sys
 from flask import Flask, render_template, Response, request, make_response
 import requests
 from requests.auth import HTTPDigestAuth
-
 from datetime import timedelta, date
 import json
-
 # Models
 from models.detection import Detection
 from models.inspection import InspectionReport
-
 # AI related
 import os
 from camera_drivers.realsense.RealSense435i import RealSense435i as depth_cam
@@ -21,12 +18,7 @@ from detectors.mask_rcnn.mrcnn import MRCNN
 import cv2
 import time
 
-# might not be neede
-from camera import VideoCamera
-
-import platform
-import sys
-#Use cuda flag - default is True; if Opencv is not build with CUDA it would delegate to CPU even if flag is True
+# Use cuda flag - default is True; if Opencv is not build with CUDA it would delegate to CPU even if flag is True
 use_cuda = True
 # Might not need in the end....
 # setup illumination on nano
@@ -66,19 +58,16 @@ detector = None
 enabled_detector = ''
 
 # depth camera params
-# TODO make the streams selectable from setting
 realsense_enabled = False
 enable_rgb = True
 enable_depth = True
 enable_imu = True
-# variable to hold travel distance
 device_id = None
 width = 1280
 height = 720
 channels = 3
 # IMU distance measurement
 distance = 0.00
-
 # variable to hold realsense camera obj
 camera = None
 
@@ -91,26 +80,39 @@ inspection_report = None
 start_time = None
 elapsed_time = None
 
-# Main page
+
 @ app.route('/')
 def index():
+    """Calls Flask.render_template to render entry point of application.
+
+    Returns:
+        renders index.html
+    """
     global realsense_enabled
     return render_template('index.html')
 
 
-# Navigate to inspection page
 @ app.route('/inspection/')
 def render_camera_view():
+    """Calls Flask.render_template to render inspection page of application. In this screen the user can start inspection as well as observe the output from the Realsense camera device and detection algorithms.
+
+    Returns:
+        renders inspection_screen.html
+    """
     ricohInfo = None
     if ricoh:
         ricohInfo = ricoh.ricohState
     return render_template('inspection_screen.html', travel_distance=distance, the_inspection_time=elapsed_time, ricoh_status=ricoh_state, cameraName=cameraName, cameraPassword=cameraPassword, illumination_status=illumination, realsense_device_status=realsense_enabled, detector_enabled=enable_detection, detections=detections_results, report_details=inspection_report, deviceInfo=ricohInfo)
 
-# Navigate to ricoh page
+
 @ app.route('/ricoh/')
 def render_ricoh_view(media_files=None):
-    global ricoh, ricoh_state, cameraName, cameraPassword
+    """Calls Flask.render_template to render ricoh device control page of application. This page can be used to communicate and control the 360 camera device.
 
+    Returns:
+        renders ricoh_screen.html
+    """
+    global ricoh, ricoh_state, cameraName, cameraPassword
     if ricoh and media_files is None:
         media_files = []
         ricoh_files = ricoh.list_files()
@@ -124,12 +126,22 @@ def render_ricoh_view(media_files=None):
 # Navigate to settingds
 @ app.route('/settings/')
 def render_settings_view():
+    """Calls Flask.render_template to render settings page of the application. From the settings screen the user can initilize connection with 360 camera device, start RealSense device and initialize detector.
+
+    Returns:
+        renders settings.html
+    """
     return render_template('settings_screen.html', ricoh_status=ricoh_state, cameraName=cameraName, cameraPassword=cameraPassword, illumination_status=illumination, realsense_device_status=realsense_enabled, detector_enabled=enabled_detector)
 
 
 # Turn illumination on
 @ app.route("/illumination_on/", methods=['POST'])
 def illumination_on():
+    """Endpoint of the application, which accepts POST request in order to switch the GPIO pin to ON and light up illumination.
+
+    Returns:
+        The user will end up in the inspection screen by calling the render_camera_view function
+    """
     global output_pin, curr_value, illumination
     if use_gpio:
         curr_value = GPIO.HIGH
@@ -141,6 +153,11 @@ def illumination_on():
 # Turn illumination off
 @ app.route("/illumination_off/", methods=['POST'])
 def illumination_off():
+    """Endpoint of the application, which accepts POST request in order to switch the GPIO pin to OFF and turn off illumination.
+
+    Returns:
+        The user will end up in the inspection screen by calling the render_camera_view function
+    """
     # uncomment on nano
     global output_pin, curr_value, illumination
     if use_gpio:
@@ -155,6 +172,11 @@ def illumination_off():
 # TODO add exception handling , returning appropriate response...
 @ app.route("/realsense_on/", methods=['POST'])
 def start_realsense_camera():
+    """Endpoint of the application, which accepts POST request in order to switch the RealSense device on.
+
+    Returns:
+        The user will end up in the settings screen by calling the render_settings_view function
+    """
     global realsense_enabled, camera
     print(realsense_enabled)
     if not realsense_enabled:
@@ -164,12 +186,14 @@ def start_realsense_camera():
                        enable_rgb=enable_rgb, enable_depth=enable_depth, enable_imu=enable_imu, device_id=device_id)
     return render_settings_view()
 
-# Turn depth cam off
-# TODO add exception handling , returning appropriate response...
-
 
 @ app.route("/realsense_off/", methods=['POST'])
 def stop_realsense_camera():
+    """Endpoint of the application, which accepts POST request in order to switch the RealSense device OFF.
+
+    Returns:
+        The user will end up in the settings screen by calling the render_settings_view function
+    """
     global realsense_enabled, camera
     if realsense_enabled:
         realsense_enabled = False
@@ -178,12 +202,16 @@ def stop_realsense_camera():
         print("Camera is not running...")
     return render_settings_view()
 
-# Load yolo detector
-# TODO add exception handling , returning appropriate response...
-
 
 @ app.route("/enable_detector_yolo/", methods=['POST'])
 def enable_detector_yolo():
+    """Endpoint of the application, accepting POST request in order to load Yolo 4 detector
+
+    TODO add exception handling , returning appropriate response...
+
+    Returns:
+        Initializes globaly the selected detector and the user will end up in the settings screen by calling the render_settings_view function
+    """
     global enabled_detector, enable_detection, detector, use_cuda
     if not enable_detection:
         enable_detection = True
@@ -193,12 +221,16 @@ def enable_detector_yolo():
         enabled_detector = "Yolo4 tiny detector"
     return render_settings_view()
 
-# Load mask rcnn detector
-# TODO add exception handling , returning appropriate response...
-
 
 @ app.route("/enable_detector_mrcnn/", methods=['POST'])
 def enable_detector_mrcnn():
+    """Endpoint of the application, accepting POST request in order to load Mask RCNN
+
+    TODO add exception handling , returning appropriate response...
+
+    Returns:
+        Initializes globaly the selected detector and the user will end up in the settings screen by calling the render_settings_view function.
+    """
     global enabled_detector, enable_detection, detector, use_cuda
 
     detector = MRCNN(use_cuda=use_cuda)
@@ -214,6 +246,13 @@ def enable_detector_mrcnn():
 
 @ app.route("/disable_detector/", methods=['POST'])
 def disable_detector():
+    """Endpoint of the application, accepting POST request in order to disable detector.
+
+    TODO add exception handling , returning appropriate response...
+
+    Returns:
+        Initializes globaly to None and renders settings screen.
+    """
     global enable_detector, enable_detection, detector
 
     detector = None
@@ -225,28 +264,14 @@ def disable_detector():
 
     return render_settings_view()
 
-# Writes the inspection report data to json file.
-# TODO add time to inspection report name ...
-
-
-@ app.route("/new_report/", methods=['POST'])
-def new_report():
-    global inspection_report, detections_results, start_time
-
-    inspection_report.addDetections(detections_results)
-
-    inspection_report.write_inspection_file(date.today().strftime("%d_%m_%Y"))
-    # Clear report variables..
-    inspection_report = None
-    detections_results = []
-
-    return render_camera_view()
-
-# Creates inspection report object based on the input form data
-
 
 @ app.route("/create_report/", methods=['POST'])
 def create_report():
+    """Method that accepts POST request which will take parameters from the Inspection report form and initializes inspection report object.
+
+    Returns:
+        Initializes the inspection report object globaly and renders the inspection screen.
+    """
     global inspection_report
     operator_name = request.form['inspectorName']
     inspection_date = request.form['datepicker']
@@ -264,11 +289,36 @@ def create_report():
     return render_camera_view()
 
 
+@ app.route("/new_report/", methods=['POST'])
+def new_report():
+    """Endpoint of the application that can be accesed with POST request. The method will append all detections to the inspection report, write it to json file and then reinitialize the respective inspection report related variables.
+    TODO add time to inspection report name ...
+    Returns:
+        Initializes the inspection report object to None and renders the inspection screen.
+    """
+    global inspection_report, detections_results, start_time
+
+    inspection_report.addDetections(detections_results)
+
+    inspection_report.write_inspection_file(date.today().strftime("%d_%m_%Y"))
+    # Clear report variables..
+    inspection_report = None
+    detections_results = []
+
+    return render_camera_view()
+
 # Stop theta video capture
 # Sends the stop capture command
 # Requires to have ricoh object set
+
+
 @ app.route("/stop/", methods=['POST'])
 def stop_capture():
+    """Endpoint of the application which accepts POST request that will stop the ongoing recording on the Ricoh camera device.
+
+    Returns:
+        Stops the recording sequence on the Ricoh camera device and renders the inspection screen.
+    """
     global ricoh, start_time, elapsed_time
     if start_time:
         elapsed_time = time.time() - start_time
@@ -286,6 +336,11 @@ def stop_capture():
 
 @ app.route("/start/", methods=['POST'])
 def start_capture():
+    """Endpoint of the application which accepts POST request that will start recording on the Ricoh camera device.
+
+    Returns:
+        Starts recording sequence on the Ricoh camera device and renders the inspection screen.
+    """
     global start_time, elapsed_time, ricoh, detections_results, distance
     detections_results = []
     distance = 0
@@ -297,20 +352,25 @@ def start_capture():
         print("Ricoh device not active")
     return render_camera_view()
 
-# Downloads the last recorded file from ricoh camera device
-
 
 @ app.route("/download_last/", methods=['POST'])
 def download_last():
+    """Endpoint that accepts POST request which will download the last recorded file from ricoh camera device.
+    Returns:
+        Downloads the last recorded file from ricoh camera device and renders the 360 camera screen.
+    """
     global ricoh
     ricoh.download_last()
     return render_template('index.html')
 
-#  Lists files
-
 
 @ app.route("/list_files/", methods=['POST', 'GET'])
 def list_ricoh_files():
+    """Endpoint of the application which accepts POST and GET requests, which will list the recordings on the 360 camera device.
+
+    Returns:
+        List with the files on the 360 camera device and re-renders the 360 camera screen.
+    """
     global ricoh
 
     files = []
@@ -324,6 +384,11 @@ def list_ricoh_files():
 # Download file
 @ app.route("/download_file/", methods=['POST'])
 def download_file():
+    """Endpoint of the application which accepts POST request and downloads the select file from the list with files on the 360 camera device.
+
+    Returns:
+        Downloads the selected file from the 360 camera device and writes it to disk, then it renders the 360 camera screen.
+    """
     global ricoh
 
     if request.method == 'POST':
@@ -337,6 +402,11 @@ def download_file():
 
 @ app.route("/delete_file/", methods=['POST'])
 def delete_file():
+    """Endpoint of the applicaiotn which accepts POST request and deletes the selected file from the list with files on the 360 camera device.
+
+    Returns:
+        Renders the 360 camera screen.
+    """
     global ricoh
 
     if request.method == 'POST':
@@ -350,6 +420,11 @@ def delete_file():
 
 @ app.route("/post_credentials/", methods=['POST'])
 def post_credentials():
+    """Endpoint of the application, which accepts POST request that will take the entered data in the camera name and password fields and initialize the respective variables, in order to be able to connect to ricoh camera device.
+
+    Returns:
+        [type]: [description]
+    """
     global cameraName, cameraPassword
 
     cameraName = request.form['cameraName']
@@ -358,13 +433,17 @@ def post_credentials():
     return render_settings_view()
 
 
-# Connects to ricoh device
-# hardcoded to SLW camera currently # TODO add params
-# Inits ricoh object
-# 2nd path is used from Ricoh screen
 @ app.route("/connect_to_ricoh/", methods=['POST'])
 @ app.route("/connect_to_ricoh_screen/", methods=['POST'])
 def connect_ricoh():
+    """Method that initializes ricoh object and connects to the 360 camera device.
+
+    TODO Configure the correct WiFi interface on the jetson nano, in order to connect to camera AP via commandline.
+    TODO Remove hardcoded parameters that are used to connect to camera device. ( Currently connects to the lectoraat's Ricoh camera)
+
+    Returns:
+        Initializes ricoh object, sets it to video mode and renders the 360 camera screen.
+    """
     try:
         global ricoh, ricoh_state, cameraName, cameraPassword
 
@@ -386,8 +465,6 @@ def connect_ricoh():
         # set device in video mode
         ricoh.set_device_videoMode()
         ricoh_state = "Connected"
-
-    # start capture
     except Exception as e:
         print("Error on startup {}".format(e))
     if request.url == 'http://127.0.0.1:5002/connect_to_ricoh/':
@@ -395,20 +472,26 @@ def connect_ricoh():
     else:
         return render_ricoh_view()
 
-# Disable ricoh...
-
 
 @ app.route("/disconnect_ricoh/", methods=['GET', 'POST'])
 def disconnect_ricoh():
+    """Endpoint of the application that accepts POST and GET requests which will initialize the Ricoh object to None
+
+    Returns:
+        Destroys ricoh object and renders 360 camera screen.
+    """
     global ricoh
     ricoh = None
     return render_ricoh_view()
 
-# Changes camera mode(video/image shooting)
-
 
 @ app.route("/set_camera_capture_mode/", methods=['GET', 'POST'])
 def set_camera_capture_mode():
+    """Endpoint of the application that accepts POST and GET requests which will change the 360 camera shooting mode (video or image) based on the selection of the user.
+
+    Returns:
+    Sets the respective recording mode on the Ricoh 360 camera device and renders the 360 camera screen.
+    """
     global ricoh
     choice = request.form['shootingMode']
     if str(choice).__contains__('video'):
@@ -417,11 +500,14 @@ def set_camera_capture_mode():
         ricoh.set_device_imageMode()
     return render_ricoh_view()
 
-# Sets ricoh device in mode which will set ISO, shutter and aperature with manualy selected values
-
 
 @ app.route("/set_manual_settings/", methods=['GET', 'POST'])
 def set_manual_settings():
+    """Endpoint of the application which accepts POST and GET request. The selected ISO, shutter speed and aperature values will be read from the manual settings form and send request to the 360 camera REST api which will set the respective parameters to the selected values.
+
+    Returns:
+        Sets the desired values to the ISO shutter speed and aperature settings of the 360 camera device and rerenders the 360 camera screen.
+    """
     global ricoh
     iso = request.form['ISOsensitivity']
     shutter = request.form['shutterSpeed']
@@ -434,17 +520,27 @@ def set_manual_settings():
 # Sets ricoh device in mode which will set ISO, shutter and aperature automatically
 @ app.route("/set_automatic_settings/", methods=['GET', 'POST'])
 def set_automatic_settings():
+    """Endpoint of the application that accepts POST and GET request, which will let the 360 camera device set the ISO, shutterspeed and aperature settings automatically.
+
+    Returns:
+        Sends request to the 360 camera device to set the ISO, shutter speed and aperature settings automatically and rerenders the 360 camera screen.
+    """
     global ricoh
     ricoh.set_settings_automatically()
     return render_ricoh_view()
 
 # Endpoint which serves the detections data in json format
-# Change len(data) == X to increase amount of returned items
-# the response contains the latest detection at the first index
 
 
 @ app.route('/data', methods=["GET", "POST"])
 def update_table():
+    """Endpoint of the application which accepts POST and GET request, which serves data about the 360 camera device (if connected) and list with detection results.
+        Change len(data) == X to increase amount of returned items
+        The response contains the latest detection at the first index
+
+    Returns:
+        JSON list. The 360 camera device information is at index 0 and list with detection results is placed at index 1.
+    """
     global detections_results, ricoh
     data = []
     ricoh_data = []
@@ -474,19 +570,69 @@ def update_table():
 # # Route to obtain frames from depth camera device
 @ app.route('/video_feed')
 def video_feed():
+    """Endpoint of the application which returns frames from the Realsense camera device.
+
+    Returns:
+        Returns stream with frames from the Realsense camera device.
+    """
     return Response(gen_realsense_feed(),
                     mimetype='multipart/x-mixed-replace; boundary=frame')
 
-# # Returns video stream from depth camera device
-# # Runs detection if enabled
+
+def restart_recording(elapsed_time):
+    """Method which will restart the recording sequence on the 360 camera device.
+    The recoring sequence will be restarted if:
+        * The recording time is close to reaching it maximum limit
+        * The device has less than 1GB storage - in this case, the latest recording will be downloaded to disk and will be removed from 360 camera device.
+        * If the 360 camera device battery level is below 15% it will stop the recording and download to disk. <- might no be needed
+    TODO breaks when trying to stop recording -> download last -> restart recording when storage limit is near limit.
+    TODO test extensively.
+    Args:
+        elapsed_time ([type]): the elapsed time from the start of the recording
+    """
+    global ricoh
+    # Set the restart recording interval in seconds
+    recording_checker = 60
+    if ricoh:
+        if ((elapsed_time % recording_checker) < 1):
+            print("Time limit reached, restarting reccording")
+            ricoh.stop_capture()
+            # time.sleep(3)
+            # restart capture
+            ricoh.start_capture()
+        # Check storage, if less than 1GB download last file, delete and restart capture
+        if ricoh.ricohState.storage_left < 1048576000:
+            print("Device storage is almost full, downloading last recording...")
+            # Download last file to disk and delete to free space
+            # !!! Breaks here....
+            ricoh.stop_capture(True)
+            ricoh.start_capture()
+            return
+        # If battery level is low save recording & notify user
+        if ricoh.ricohState.battery_level < 0.15:
+            print("Battery level is low, saving recording...")
+            ricoh.stop_capture(True)
+            # ricoh.download_last(False)
+            # set flag to notify user about batery level
+            return
+    else:
+        print("Ricoh not enabled....")
 
 
 def gen_realsense_feed():
-    global realsense_enabled, camera, enable_imu, enable_detection, detector, detections_results, start_time, elapsed_time, distance, norm_avg, norm_avgs, firstAccel
+    """Method that:
+     - reads RGB, Depth and IMU streams from the Realsense camera device;
+     - updates the traveled distance variable; 
+     - performs detection on the RGB stream from the Realsense device if detector is enabled and append the detection to the list with detections
+     - Calculates distance to the center of pre-defined ROI in order to perform obstacle detection without the need of detector.
+    """
+    global realsense_enabled, camera, enable_imu, enable_detection, detector, detections_results, start_time, elapsed_time, distance, ricoh
+
     if realsense_enabled:
         while realsense_enabled:
             if start_time:
                 elapsed_time = time.time() - start_time
+                restart_recording(elapsed_time)
 
             if camera:
                 color_image, depth_frame, delta_travel_distance, roi_distance = camera.run()
@@ -548,6 +694,10 @@ def gen_realsense_feed():
 
 @ app.route('/ricoh_feed')
 def ricoh_feed():
+    """Endpoint of the application which returns frames from the Ricoh 360 camera device.
+    Returns:
+        Returns stream with frames from the RRicoh 360 camera device.
+    """
     return Response(gen_ricoh_feed(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
 # Connects to ricoh and starts preview from camera...
@@ -555,6 +705,11 @@ def ricoh_feed():
 
 
 def gen_ricoh_feed():
+    """Method that reads frame from livePreview endpoint of Ricoh camera device and streams the frames.
+     The resolution of the live preview is limited to 1024x768
+    Yields:
+        returns the frames from the 360 camera device.
+    """
     global ricoh
     url = "".join(("http://192.168.1.1:80/osc/commands/execute"))
     body = json.dumps({"name": "camera.getLivePreview"})
@@ -594,6 +749,9 @@ def gen_ricoh_feed():
 # Can pass desired IP host adress, else uses 127.0.0.1
 # Always port 5002
 if __name__ == '__main__':
+    """Entry point of the application.
+       If the main.py script is started from command line, the "desired_host" parameter can be set by giving the desired IP address to host the application.
+    """
     desired_host = None
     for arg in sys.argv[1:]:
         desired_host = arg

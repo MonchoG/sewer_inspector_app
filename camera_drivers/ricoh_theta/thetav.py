@@ -195,9 +195,10 @@ class RicohTheta:
         #
         request = self.post_request("/osc/commands/execute", body)
         json_response = request.json()
-        self.last_video = json_response["results"]["fileUrls"]
-        if withDownload:
-            self.download_files(json_response["results"]["fileUrls"])
+        
+        self.last_video = json_response["results"]["fileUrls"][0]
+        if withDownload:  
+            self.download_last()
 
         self.update_ricoh_state()
 
@@ -218,13 +219,24 @@ class RicohTheta:
                 media_files.append(medFile)
         return media_files
 
-    def download_last(self):
-        self.download_files(self.last_video)
+    def download_last(self, withDelete=False):
+        #self.download_files(self.last_video,withDelete=withDelete)
+        response = requests.get(self.last_video, stream=True)
+        # reponse returns file path link, the name of the file starts from char 67
+        file_name = self.last_video[67:]
+        with open(file_name, 'wb') as f:
+            # write the contents of the response (r.content)
+            # to a new file in binary mode.
+            f.write(response.content)
+        if withDelete:
+            self.delete_file(self.last_video)
+            self.last_video = None
+        print("[INFO] All files downloaded...")
 
     # Downloads the files from the links specified in files
     # files is list with download urls from Ricoh Storage
 
-    def download_files(self, files):
+    def download_files(self, files, withDelete=False):
         file_count = 0
         for a_file in files:
             response = requests.get(a_file.fileUrl, stream=True)
@@ -234,7 +246,9 @@ class RicohTheta:
                 # write the contents of the response (r.content)
                 # to a new file in binary mode.
                 f.write(response.content)
-            file_count += 1
+            file_count += 1            
+        if withDelete:
+            self.delete_file(files)
         print("[INFO] All files downloaded...")
 
     # Download single file
