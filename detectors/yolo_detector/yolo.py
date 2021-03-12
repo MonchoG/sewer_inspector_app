@@ -4,7 +4,7 @@ import pyrealsense2 as rs
 import time
 import cv2
 from models.detection import Detection
-
+from detectors.yolo_detector.tracker import EuclideanDistTracker
 yolo_coco_labels = os.path.join(
     "detectors/yolo_detector/weights/yolo-coco/coco.names")
 
@@ -17,12 +17,19 @@ yolo4_cfg = os.path.join("detectors/yolo_detector/weights/yolo4coco/yolo4.cfg")
 yolo4_weights = os.path.join(
     "detectors/yolo_detector/weights/yolo4coco/yolo4.weights")
 
+yolo4_tiny_cfg_sewer =  os.path.join(
+    "detectors/yolo_detector/weights/yolo4tiny_sewer/custom-yolov4-tiny-detector_3.cfg")
+yolo4_tiny_weights_sewer =  os.path.join(
+    "detectors/yolo_detector/weights/yolo4tiny_sewer/custom-yolov4-tiny-detector_3_best.weights")
+yolo4_tiny_labels_sewer = os.path.join(
+    "detectors/yolo_detector/weights/yolo4tiny_sewer/obj.names")
 
 class Yolo:
     def __init__(self, config=yolo4tiny_cfg,
                  weights=yolo4tiny_weights,
                  labels=yolo_coco_labels,
-                 confidence_param=0.3, thresh_param=0.25, use_cuda=False):
+                 confidence_param=0.3, thresh_param=0.25, use_cuda=False,
+                 distance_check=350):
         print("[INFO] loading YOLO from disk...")
         self.net = cv2.dnn.readNetFromDarknet(
             os.path.join(config), os.path.join(weights))
@@ -36,8 +43,15 @@ class Yolo:
         self.ln = self.net.getLayerNames()
         self.ln = [self.ln[i[0] - 1]
                    for i in self.net.getUnconnectedOutLayers()]
-        self.confidence_param = confidence_param
-        self.thresh_param = thresh_param
+        self.confidence_param = float(confidence_param)
+        self.thresh_param = float(thresh_param)
+        #Tracker
+        self.distance_check = distance_check
+        self.tracker = EuclideanDistTracker(self.distance_check)
+        
+    def reinit_tracker(self):
+        self.tracker = EuclideanDistTracker(self.distance_check)
+
 
     def detect(self, input_image, verbose=False):
         blob = cv2.dnn.blobFromImage(
@@ -100,6 +114,9 @@ class Yolo:
 
         idxs = cv2.dnn.NMSBoxes(boxes, confidences, self.confidence_param,
                                 self.thresh_param)
+        
+        tracking_detections = []
+
         # ensure at least one detection exists
         if len(idxs) > 0:
             # loop over the indexes we are keeping
@@ -107,6 +124,10 @@ class Yolo:
                 # extract the bounding box coordinates
                 (x, y) = (boxes[i][0], boxes[i][1])
                 (w, h) = (boxes[i][2], boxes[i][3])
+                
+                #Object tracking
+                tracking_detections.append([x, y, w, h])
+                
                 distance_center = None
                 if aligned_depth_frame and depth_scale:
                     # Good accuracy
@@ -125,18 +146,34 @@ class Yolo:
                         self.LABELS[classIDs[i]], confidences[i], distance_center)
                     # Create detection object to return
                     detect_mod = Detection(
-                        damage_type=self.LABELS[classIDs[i]], location=travel_distance, distance=distance_center, time_from_start=elapsed_time)
+                        damage_type=self.LABELS[classIDs[i]], location=travel_distance, distance=distance_center, time_from_start=elapsed_time, bbox=[x, y, w, h])
                 else:
                     text = "{}: {:.4f}".format(
                         self.LABELS[classIDs[i]], confidences[i])
                     # Create detection object to return
                     detect_mod = Detection(
-                        damage_type=self.LABELS[classIDs[i]], location=travel_distance, time_from_start=elapsed_time)
+                        damage_type=self.LABELS[classIDs[i]], location=travel_distance, time_from_start=elapsed_time, bbox=[x, y, w, h])
 
                 cv2.putText(input_image, text, (x, y - 5), cv2.FONT_HERSHEY_SIMPLEX,
                             0.5, col, 2)
                 # Appends to local list to return
                 detections.append(detect_mod)
+        # Update the tracker
+        boxes_ids = self.tracker.update(tracking_detections)
+        for box_id in boxes_ids:
+            #obtain the tracked objects id and add to image
+            x, y, w, h, boxId = box_id
+            cv2.putText(input_image, str(boxId),(x, y + 10), cv2.FONT_HERSHEY_PLAIN, 2, (255, 0, 0), 2)
+            # Iterate over the list with Detection objects and set the IDs
+        for i in range(0, len(detections)):
+            # If BB points match, assign the ID
+            x, y, w, h, boxId = boxes_ids[i]
+            detection = detections[i]
+            if detection.same_bb([x,y,w,h]):
+                detection.set_id(boxId)
+                
+
+
         # Return the image and the list with detections....
         return input_image, detections
 

@@ -116,16 +116,68 @@
                 <th><strong>Detector control</strong></th>
                 <th>Detection enabled: {{detector_enabled}}</th>
                 <th></th>
+                <th></th>
+                <th></th>
             </tr>
             <tr>
                 <td>
                     <form action="/enable_detector_yolo/" method="post">
-                        <button name="detectorOn" type="submit"> Launch Yolo detector</button>
+                        <button name="detectorOn" type="submit"> Launch Yolo 4 tiny detector</button><br /><br />
+                        <span title="Valid values from 0.01 to 1">Threshold:
+                            <input name="thresh" type="text"/>
+
+                        </span><br /><br />
+                        <span title="Valid values from 0.01 to 1">Confidence:
+                            <input name="confidence" type="text"/>
+                        </span><br /><br />
+                        <span title="Valid values are integers (default is 350)">Tracker threshold:
+                            <input name="tracker_dst" type="text"/>
+                        </span><br />
+                    </form>
+                </td>
+                <td>
+                    <form action="/enable_detector_yolo_full/" method="post">
+                        <button name="detectorOn" type="submit"> Launch Yolo 4 detector</button><br /><br />
+                        <span title="Valid values from 0.01 to 1">Threshold:
+                            <input name="thresh" type="text"/>
+                            
+                        </span><br /><br />
+                        <span title="Valid values from 0.01 to 1">Confidence:
+                            <input name="confidence" type="text"/>
+                        </span><br /><br />
+                        <span title="Valid values are integers (default is 350)">Tracker threshold:
+                            <input name="tracker_dst" type="text"/>
+                        </span><br />
+                    </form>
+                </td>
+                <td>
+                    <form action="/enable_detector_yolo_sewer/" method="post">
+                        <button name="detectorOn" type="submit"> Launch Yolo 4 tiny sewer detector</button><br /><br />
+                        <span title="Valid values from 0.01 to 1">Threshold:
+                            <input name="thresh" type="text"/>
+                            
+                        </span><br /><br />
+                        <span title="Valid values from 0.01 to 1">Confidence:
+                            <input name="confidence" type="text"/>
+                        </span><br /><br />
+                        <span title="Valid values are integers (default is 350)">Tracker threshold:
+                            <input name="tracker_dst" type="text"/>
+                        </span><br />
                     </form>
                 </td>
                 <td>
                     <form action="/enable_detector_mrcnn/" method="post">
-                        <button name="detectorOn" type="submit"> Launch Mask RCNN detector</button>
+                        <button name="detectorOn" type="submit"> Launch Mask RCNN detector</button><br /><br />
+                        <span title="Valid values from 0.01 to 1">Threshold:
+                            <input name="thresh" type="text"/>
+                            
+                        </span><br /><br />
+                        <span title="Valid values from 0.01 to 1">Confidence:
+                            <input name="confidence" type="text"/>
+                        </span><br /><br />
+                        <span title="Valid values are integers (default is 350)">Tracker threshold:
+                            <input name="tracker_dst" type="text"/>
+                        </span><br />
                     </form>
                 </td>
                 <td>

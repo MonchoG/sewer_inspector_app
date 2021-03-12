@@ -1,9 +1,14 @@
 # application related
 import platform
 import sys
+import warnings
+import logging
+
+import getopt
 from flask import Flask, render_template, Response, request, make_response
 import requests
 from requests.auth import HTTPDigestAuth
+import datetime
 from datetime import timedelta, date
 import json
 # Models
@@ -13,6 +18,8 @@ from models.inspection import InspectionReport
 import os
 from camera_drivers.realsense.RealSense435i import RealSense435i as depth_cam
 from camera_drivers.ricoh_theta.thetav import RicohTheta as ricoh_camera
+from camera_drivers.ricoh_theta.theta_usb import RicohUsb as ricohUsb
+
 from detectors.yolo_detector.yolo import Yolo
 from detectors.mask_rcnn.mrcnn import MRCNN
 import cv2
@@ -24,24 +31,8 @@ use_cuda = True
 # setup illumination on nano
 use_gpio = False
 if str(platform.platform()).__contains__("Windows"):
-    print("On windows, not importing GPIO")
-    use_gpio = False
+    print("On windows, not enabling CUDA")
     use_cuda = False
-else:
-    import RPi.GPIO as GPIO
-    use_gpio = True
-
-    # Pin Definitions
-    output_pin = 27  # BCM 27, board 13
-    # Uncomment on nano to init gpio pins...
-    GPIO.setmode(GPIO.BCM)  # BCM pin-numbering scheme from Raspberry Pi
-    # # set pin as an output pin with optional initial state of LOW
-    GPIO.setup(output_pin, GPIO.OUT, initial=GPIO.LOW)
-    # GPIO.setup(output_pin2, GPIO.OUT, initial=GPIO.LOW)
-    # GPIO.setup(output_pin3, GPIO.OUT, initial=GPIO.LOW)
-    # Ilumination
-illumination_on = False
-illumination = "OFF"
 
 # Application
 app = Flask(__name__)
@@ -61,15 +52,25 @@ enabled_detector = ''
 realsense_enabled = False
 enable_rgb = True
 enable_depth = True
-enable_imu = True
+# Disabled IMU due no need..
+enable_imu = False
 device_id = None
-width = 1280
-height = 720
+# Set camera resolution and fps...
+width = 1920    
+height = 1080
 channels = 3
+fps = 15
+#
+write_bag = False
 # IMU distance measurement
 distance = 0.00
 # variable to hold realsense camera obj
 camera = None
+# Recording to video related
+writer = None
+write_raw_rgb = False
+# video codec..
+fourcc = cv2.VideoWriter_fourcc(*'mp4v')            
 
 # List to contain the detections from inspection
 detections_results = []
@@ -88,7 +89,6 @@ def index():
     Returns:
         renders index.html
     """
-    global realsense_enabled
     return render_template('index.html')
 
 
@@ -97,13 +97,14 @@ def render_camera_view():
     """Calls Flask.render_template to render inspection page of application. In this screen the user can start inspection as well as observe the output from the Realsense camera device and detection algorithms.
 
     Returns:
-        renders inspection_screen.html
+        renders inspection_screen_new.html
     """
-    ricohInfo = None
-    if ricoh:
-        ricohInfo = ricoh.ricohState
-    return render_template('inspection_screen.html', travel_distance=distance, the_inspection_time=elapsed_time, ricoh_status=ricoh_state, cameraName=cameraName, cameraPassword=cameraPassword, illumination_status=illumination, realsense_device_status=realsense_enabled, detector_enabled=enable_detection, detections=detections_results, report_details=inspection_report, deviceInfo=ricohInfo)
-
+    global distance, elapsed_time, realsense_enabled, enable_detection,detections_results,inspection_report
+    logging.info("Rendering camera view...")
+    try:
+        return render_template('inspection_screen_new.html', travel_distance=distance, the_inspection_time=elapsed_time, realsense_device_status=realsense_enabled, detector_enabled=enable_detection, detections=detections_results, report_details=inspection_report)
+    except Exception as e:
+        logging.error(e)
 
 @ app.route('/ricoh/')
 def render_ricoh_view(media_files=None):
@@ -131,41 +132,7 @@ def render_settings_view():
     Returns:
         renders settings.html
     """
-    return render_template('settings_screen.html', ricoh_status=ricoh_state, cameraName=cameraName, cameraPassword=cameraPassword, illumination_status=illumination, realsense_device_status=realsense_enabled, detector_enabled=enabled_detector)
-
-
-# Turn illumination on
-@ app.route("/illumination_on/", methods=['POST'])
-def illumination_on():
-    """Endpoint of the application, which accepts POST request in order to switch the GPIO pin to ON and light up illumination.
-
-    Returns:
-        The user will end up in the inspection screen by calling the render_camera_view function
-    """
-    global output_pin, curr_value, illumination
-    if use_gpio:
-        curr_value = GPIO.HIGH
-        GPIO.output(output_pin, curr_value)
-    illumination = "ON"
-    return render_camera_view()
-
-
-# Turn illumination off
-@ app.route("/illumination_off/", methods=['POST'])
-def illumination_off():
-    """Endpoint of the application, which accepts POST request in order to switch the GPIO pin to OFF and turn off illumination.
-
-    Returns:
-        The user will end up in the inspection screen by calling the render_camera_view function
-    """
-    # uncomment on nano
-    global output_pin, curr_value, illumination
-    if use_gpio:
-        curr_value = GPIO.LOW
-        GPIO.output(output_pin, curr_value)
-
-    illumination = "OFF"
-    return render_camera_view()
+    return render_template('settings_screen.html', realsense_device_status=realsense_enabled, detector_enabled=enabled_detector)
 
 
 # Turn depth camera on
@@ -178,11 +145,10 @@ def start_realsense_camera():
         The user will end up in the settings screen by calling the render_settings_view function
     """
     global realsense_enabled, camera
-    print(realsense_enabled)
     if not realsense_enabled:
         realsense_enabled = True
 
-    camera = depth_cam(width=width, height=height, channels=channels,
+    camera = depth_cam(width=width, height=height, channels=channels, fps = fps,
                        enable_rgb=enable_rgb, enable_depth=enable_depth, enable_imu=enable_imu, device_id=device_id)
     return render_settings_view()
 
@@ -356,7 +322,6 @@ def create_report():
 
     inspection_report = InspectionReport(
         operator_name, inspection_date, city, street, pipe_id, manhole_id, dimensions, shape, material)
-    # print(inspection_report.toJSON())
     return render_camera_view()
 
 
@@ -367,40 +332,49 @@ def new_report():
     Returns:
         Initializes the inspection report object to None and renders the inspection screen.
     """
-    global inspection_report, detections_results, start_time
+    global inspection_report, detections_results, detector
 
-    inspection_report.addDetections(detections_results)
-
-    inspection_report.write_inspection_file(date.today().strftime("%d_%m_%Y"))
+    if detections_results:
+        inspection_report.addDetections(detections_results)
+    
+    inspection_report.write_inspection_file()
     # Clear report variables..
     inspection_report = None
     detections_results = []
-    detector.reinit_tracker()
-
+    if detector:
+        detector.reinit_tracker()
     return render_camera_view()
 
-# Stop theta video capture
-# Sends the stop capture command
-# Requires to have ricoh object set
-
-
-@ app.route("/stop/", methods=['POST'])
+@ app.route("/stop/", methods=['POST', 'GET'])
 def stop_capture():
-    """Endpoint of the application which accepts POST request that will stop the ongoing recording on the Ricoh camera device.
+    """Endpoint of the application which accepts POST request that will stop the ongoing recording on the Ricoh camera device and will release the Realsense frame writer
 
     Returns:
         Stops the recording sequence on the Ricoh camera device and renders the inspection screen.
     """
-    global ricoh, start_time, elapsed_time
+    global ricoh, start_time, elapsed_time,write_raw_rgb, writer
     if start_time:
         elapsed_time = time.time() - start_time
     start_time = None
     if ricoh:
         ricoh.stop_capture(withDownload=False)
     else:
-        print("Ricoh device not active")
+        logging.info("Ricoh device not active")
 
-    return render_camera_view()
+    # if write_raw_rgb and writer:
+    #     logging.info("About to release writer")
+    #     writer.release()
+    #     writer = None
+    #     logging.info("writer released...")
+    # else:
+    #     logging.info("writer not active... Write  raw rgb flag {} | writer == None {}".format(write_raw_rgb, writer == None))
+    write_raw_rgb = False
+    try:
+        # Breaks here randomly......
+        return render_camera_view()
+        # Breaks above randomly.....
+    except Exception as e:
+        logging.error(e)
 
 # Starts capture on ricoh device
 # Continuous images/ or video depending on device mode
@@ -413,7 +387,7 @@ def start_capture():
     Returns:
         Starts recording sequence on the Ricoh camera device and renders the inspection screen.
     """
-    global start_time, elapsed_time, ricoh, detections_results, distance
+    global start_time, elapsed_time, ricoh, write_raw_rgb, writer, detections_results, distance, inspection_report
     detections_results = []
     distance = 0
     elapsed_time = None
@@ -422,7 +396,17 @@ def start_capture():
     if ricoh:
         ricoh.start_capture()
     else:
-        print("Ricoh device not active")
+        logging.info("Ricoh device not active")
+    
+    write_raw_rgb = True
+    # if write_raw_rgb:
+    #     # Define codec
+    #     video_name = "reports/" + datetime.datetime.now().strftime("%d_%m_%Y %H_%M_%S") + "  " +  inspection_report.city + "_" + inspection_report.street + "_" + inspection_report.pipe_id + "_" + inspection_report.manhole_id +".avi"
+    #     if writer:
+    #         logging.warning("Writer object is already initialized...")
+    #     else:
+    #         writer = cv2.VideoWriter(video_name,fourcc, 30.0, (1920,1080))
+    #     inspection_report.addVideoFiles([video_name])
     return render_camera_view()
 
 
@@ -467,7 +451,7 @@ def download_file():
     if request.method == 'POST':
         if request.form.get("downloadFileButton"):
             ricoh.download_file(request.form['downloadFileButton'])
-            print("Download complete")
+            logging.info("Download complete")
     return render_ricoh_view()
 
 # Deletes selected file from table
@@ -485,7 +469,7 @@ def delete_file():
     if request.method == 'POST':
         if request.form.get("deleteFileButton"):
             ricoh.delete_file([request.form['deleteFileButton']])
-            print("Delete complete")
+            logging.info("Delete complete")
     return render_ricoh_view()
 
 # Sets the required credentials to access ricoh device API
@@ -534,12 +518,12 @@ def connect_ricoh():
             cameraPassword = '00248307'
 
         ricoh = ricoh_camera(cameraName, cameraPassword)
-        print(ricoh.get_device_options())
+        logging.info(ricoh.get_device_options())
         # set device in video mode
         ricoh.set_device_videoMode()
         ricoh_state = "Connected"
     except Exception as e:
-        print("Error on startup {}".format(e))
+        logging.error("Error on startup {}".format(e))
     if request.url == 'http://127.0.0.1:5002/connect_to_ricoh/':
         return render_settings_view()
     else:
@@ -634,26 +618,29 @@ def update_table():
     ricoh_data = []
     # get ricoh state
     ricohInfo = None
-    if ricoh:
-        ricoh.ricohState = ricoh.update_ricoh_state()
-        ricohInfo = ricoh.ricohState
-        ricoh_data.append(ricohInfo.toJSON())
-    # append to data as separate json 'list'
-    data.append(ricoh_data)
+    try:
+        if ricoh:
+            ricoh.ricohState = ricoh.update_ricoh_state()
+            ricohInfo = ricoh.ricohState
+            ricoh_data.append(ricohInfo.toJSON())
+        # append to data as separate json 'list'
+        data.append(ricoh_data)
 
-    detection_data = []
+        detection_data = []
 
-    for detect in reversed(detections_results):
-        detection_data.append(detect.toJSON())
+        for detect in reversed(detections_results):
+            detection_data.append(detect.toJSON())
 
-        if len(detection_data) == 25:
-            break
+            if len(detection_data) == 25:
+                break
 
-    data.append(detection_data)
+        data.append(detection_data)
 
-    response = make_response(json.dumps(data))
-    response.content_type = 'application/json'
-    return response
+        response = make_response(json.dumps(data))
+        response.content_type = 'application/json'
+        return response
+    except Exception as e:
+        return Response("{'Error with info data stream':'{}'}".format(e), status=440, mimetype='application/json')
 
 
 # # Route to obtain frames from depth camera device
@@ -664,8 +651,97 @@ def video_feed():
     Returns:
         Returns stream with frames from the Realsense camera device.
     """
-    return Response(gen_realsense_feed(),
-                    mimetype='multipart/x-mixed-replace; boundary=frame')
+    try:
+        return Response(gen_realsense_feed(),
+                        mimetype='multipart/x-mixed-replace; boundary=frame')
+    except Exception as e:
+        return Response("{'Error with realsense feed':'{}'}".format(e), status=450, mimetype='application/json')
+
+def gen_realsense_feed():
+    """Method that:
+     - reads RGB, Depth and IMU streams from the Realsense camera device;
+     - updates the traveled distance variable; 
+     - performs detection on the RGB stream from the Realsense device if detector is enabled and append the detection to the list with detections
+     - Calculates distance to the center of pre-defined ROI in order to perform obstacle detection without the need of detector.
+    """
+    global realsense_enabled, camera, enable_imu, enable_detection, detector, detections_results, start_time, elapsed_time, distance, ricoh, write_raw_rgb, writer, inspection_reportn
+    frame_counter = 0
+    try:
+        if realsense_enabled:        
+            while realsense_enabled:
+                if start_time:
+                    elapsed_time = time.time() - start_time
+                    if ricoh:
+                        restart_recording(elapsed_time)
+
+                if camera:
+                    try:
+                        rgb_frame,color_image, depth_frame, delta_travel_distance, roi_distance = camera.run()
+                    except Exception as e:
+                        logging.error("Realsense pipeline generated exception {}".format(e))
+                    
+                    if write_raw_rgb and rgb_frame.any():
+                        try:
+                            frame_counter +=1
+                            image_name = "reports/" + datetime.datetime.now().strftime("%d_%m_%Y %H_%M_%S_%f") + "  " +  inspection_report.city + "_" + inspection_report.street + "_" + inspection_report.pipe_id + "_" + inspection_report.manhole_id +".jpg"
+                            cv2.imwrite(image_name,rgb_frame)
+                            inspection_report.addImageFiles([image_name])
+                        except Exception as e:
+                            logging.error('Writer threw exception {}'.format(e))
+                    if enable_imu:
+                        distance += delta_travel_distance
+                   
+                    try:
+                        if enable_detection:
+                            detection = detector.detect(color_image)
+                            if detection:
+                                color_image, detections = detector.draw_results(
+                                    detection, color_image, depth_frame, camera.depth_scale, travel_distance=distance, elapsed_time=elapsed_time)
+                                # Append the results to the entire list with detection results
+                                detections_results.extend(detections)
+                    except Exception as e:
+                        logging.error("exception in detection {}".format(e))
+                    
+                    # Calculate the distance infront of camera
+                    if depth_frame and camera.depth_scale:
+                        # Drawing ROI for obstacle detection
+                        try:
+                            col_center = (0, 255, 0)
+                            height, width, channels = color_image.shape
+                            upper_left = ((width // 4) + 200, (height // 4))
+                            bottom_right = ((width * 3 // 4) - 200,
+                                            (height * 3 // 4) + 100)
+                            # draw in the image a BB and Dot at its center, to which distance is measured
+                            cv2.rectangle(color_image, upper_left, bottom_right,
+                                        col_center, thickness=1)
+                            # Find center
+                            cx = int(
+                                (upper_left[0] + (bottom_right[0] - upper_left[0])*0.5))
+                            cy = int(
+                                (upper_left[1] + (bottom_right[1] - upper_left[1])*0.5))
+                            # add dot at center
+                            cv2.circle(color_image, (cx, cy),
+                                    radius=3, color=col_center, thickness=3)
+                            text = 'Could not compute distance to ROI..'
+                            # If there was succesful distance measurement from Realsense, add label with distance
+                            if roi_distance:
+                                text = 'Distance to ROI  {:.4f}m'.format(
+                                    roi_distance)
+                                if float(roi_distance) <= 0.5:
+                                    text = 'Distance to ROI  {:.4f}m ! There is something close to camera'.format(
+                                        roi_distance)
+                            cv2.putText(color_image, text, (upper_left[0], upper_left[1] - 5), cv2.FONT_HERSHEY_SIMPLEX,
+                                        0.5, col_center, 2)
+                        except Exception as e:
+                            # if cant compute distance skip
+                            continue
+                        # end calculate distance to ROI
+                    # encode and return
+                    ret, jpg = cv2.imencode('.jpg', color_image)
+                    yield (b'--frame\r\n'
+                        b'Content-Type: image/jpg\r\n\r\n' + jpg.tobytes() + b'\r\n\r\n')
+    except Exception as e:
+        logging.error("Problem in generating feed from Realsense... {}".format(e))
 
 
 def restart_recording(elapsed_time):
@@ -684,14 +760,14 @@ def restart_recording(elapsed_time):
     recording_checker = 600
     if ricoh:
         if ((elapsed_time % recording_checker) < 1):
-            print("Time limit reached, restarting reccording")
+            logging.info("Time limit reached, restarting reccording")
             ricoh.stop_capture()
             # time.sleep(3)
             # restart capture
             ricoh.start_capture()
         # Check storage, if less than 1GB download last file, delete and restart capture
         if ricoh.ricohState.storage_left < 1048576000:
-            print("Device storage is almost full, downloading last recording...")
+            logging.info("Device storage is almost full, downloading last recording...")
             # Download last file to disk and delete to free space
             # !!! Breaks here....
             ricoh.stop_capture(False)
@@ -705,82 +781,7 @@ def restart_recording(elapsed_time):
         #     # set flag to notify user about batery level
         #     return
     else:
-        print("Ricoh not enabled....")
-
-
-def gen_realsense_feed():
-    """Method that:
-     - reads RGB, Depth and IMU streams from the Realsense camera device;
-     - updates the traveled distance variable; 
-     - performs detection on the RGB stream from the Realsense device if detector is enabled and append the detection to the list with detections
-     - Calculates distance to the center of pre-defined ROI in order to perform obstacle detection without the need of detector.
-    """
-    global realsense_enabled, camera, enable_imu, enable_detection, detector, detections_results, start_time, elapsed_time, distance, ricoh
-
-    if realsense_enabled:
-        while realsense_enabled:
-            if start_time:
-                elapsed_time = time.time() - start_time
-                if ricoh:
-                    restart_recording(elapsed_time)
-
-            if camera:
-                color_image, depth_frame, delta_travel_distance, roi_distance = camera.run()
-                if enable_imu:
-                    distance += delta_travel_distance
-                try:
-  
-                    if enable_detection:
-                        detection = detector.detect(color_image)
-                        if detection:
-                            color_image, detections = detector.draw_results(
-                                detection, color_image, depth_frame, camera.depth_scale, travel_distance=distance, elapsed_time=elapsed_time)
-                            # Append the results to the entire list with detection results
-                            detections_results.extend(detections)
-                except Exception as e:
-                    print("exception in detection {}".format(e))
-                # Calculate the distance infront of camera
-                if depth_frame and camera.depth_scale:
-                    # Drawing ROI for obstacle detection
-                    try:
-                        col_center = (0, 255, 0)
-                        height, width, channels = color_image.shape
-                        upper_left = ((width // 4) + 200, (height // 4))
-                        bottom_right = ((width * 3 // 4) - 200,
-                                        (height * 3 // 4) + 100)
-                        # draw in the image a BB and Dot at its center, to which distance is measured
-                        cv2.rectangle(color_image, upper_left, bottom_right,
-                                      col_center, thickness=1)
-                        # Find center
-                        cx = int(
-                            (upper_left[0] + (bottom_right[0] - upper_left[0])*0.5))
-                        cy = int(
-                            (upper_left[1] + (bottom_right[1] - upper_left[1])*0.5))
-                        # add dot at center
-                        cv2.circle(color_image, (cx, cy),
-                                   radius=3, color=col_center, thickness=3)
-                        text = 'Could not compute distance to ROI..'
-                        # If there was succesful distance measurement from Realsense, add label with distance
-                        if roi_distance:
-                            text = 'Distance to ROI  {:.4f}m'.format(
-                                roi_distance)
-                            if float(roi_distance) <= 0.5:
-                                text = 'Distance to ROI  {:.4f}m ! There is something close to camera'.format(
-                                    roi_distance)
-                        cv2.putText(color_image, text, (upper_left[0], upper_left[1] - 5), cv2.FONT_HERSHEY_SIMPLEX,
-                                    0.5, col_center, 2)
-                    except Exception as e:
-                        # if cant compute distance skip
-                        continue
-                    # end calculate distance to ROI
-
-
-#               # encode and return
-                ret, jpg = cv2.imencode('.jpg', color_image)
-                yield (b'--frame\r\n'
-                       b'Content-Type: image/jpg\r\n\r\n' + jpg.tobytes() + b'\r\n\r\n')
-                # Write frame to disk
-                # cv2.imwrite("{}.jpg".format(frame_count), color_image)
+        logging.info("Ricoh not enabled....")
 
 
 @ app.route('/ricoh_feed')
@@ -794,7 +795,6 @@ def ricoh_feed():
 # Connects to ricoh and starts preview from camera...
 # TODO optimize
 
-
 def gen_ricoh_feed():
     """Method that reads frame from livePreview endpoint of Ricoh camera device and streams the frames.
      The resolution of the live preview is limited to 1024x768
@@ -807,7 +807,7 @@ def gen_ricoh_feed():
     try:
         response = requests.post(url, data=body, headers={
             'content-type': 'application/json'}, auth=HTTPDigestAuth(ricoh.device_id, ricoh.device_password), stream=True, timeout=5)
-        print("Preview posted; checking response")
+        logging.info("Preview posted; checking response")
         if response.status_code == 200:
             bytes = ''
             jpg = ''
@@ -830,11 +830,11 @@ def gen_ricoh_feed():
                     yield (b'--frame\r\n'
                            b'Content-Type: image/jpg\r\n\r\n' + image + b'\r\n\r\n')
         else:
-            print("theta response.status_code _preview: {0}".format(
+            logging.info("theta response.status_code _preview: {0}".format(
                 response.status_code))
             response.close()
     except Exception as err:
-        print("theta error _preview: {0}".format(err))
+        logging.error("theta error _preview: {0}".format(err))
 
 
 # Can pass desired IP host adress, else uses 127.0.0.1
@@ -843,6 +843,12 @@ if __name__ == '__main__':
     """Entry point of the application.
        If the main.py script is started from command line, the "desired_host" parameter can be set by giving the desired IP address to host the application.
     """
+        # Writting to Log file
+    logging.basicConfig(format='%(asctime)s - %(message)s', level=logging.INFO, handlers=[
+        logging.FileHandler("last_run.log"),
+        logging.StreamHandler()
+    ])
+    
     desired_host = None
     for arg in sys.argv[1:]:
         desired_host = arg
@@ -850,4 +856,7 @@ if __name__ == '__main__':
     if not desired_host:
         desired_host = '127.0.0.1'
 
-    app.run(host=desired_host, port=5002, debug=True)
+    try:
+        app.run(host=desired_host, port=5002, debug=True, use_reloader=False)
+    except Exception as e:
+        logging.error("Exception in running app {}".format(e))

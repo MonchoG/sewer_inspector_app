@@ -22,16 +22,21 @@ CHANNELS = 3
 
 
 class RealSense435i:
-    def __init__(self, width=WIDTH, height=HEIGHT, channels=CHANNELS, enable_rgb=True, enable_depth=True, enable_imu=False, device_id=None):
+    def __init__(self, width=1280, height=720, channels=3, fps = 15, enable_rgb=True, enable_depth=True, enable_imu=False, record_bag=None, read_bag=None, device_id=None):
         # "923322071108" # serial number of device to use or None to use default
         self.device_id = device_id
         self.enable_imu = enable_imu
         self.enable_rgb = enable_rgb
         self.enable_depth = enable_depth
+        # Recording data to disk related
+        self.record_bag = record_bag
+        self.read_bag = read_bag
 
         self.width = width
         self.height = height
+        
         self.channels = channels
+        self.fps = fps
         self.resize = (width != WIDTH) or (
             height != height) or (channels != CHANNELS)
         if self.resize:
@@ -59,17 +64,25 @@ class RealSense435i:
             self.pipeline = rs.pipeline()
             config = rs.config()
 
-            # if we are provided with a specific device, then enable it
+           # if we are provided with a specific device, then enable it
             if None != self.device_id:
                 config.enable_device(self.device_id)
 
             if self.enable_depth:
-                config.enable_stream(rs.stream.depth, 1280,
-                                     720, rs.format.z16, 30)  # depth
+                config.enable_stream(rs.stream.depth, 1280, 720, rs.format.z16, 30) # depth
 
             if self.enable_rgb:
-                config.enable_stream(rs.stream.color, 1280,
-                                     720, rs.format.bgr8, 30)  # rgb
+                config.enable_stream(rs.stream.color, self.width, self.height, rs.format.bgr8, self.fps) # rgb
+
+            if self.read_bag:
+                print(self.read_bag)
+                config.enable_device_from_file(self.read_bag)
+            elif self.record_bag:
+                print("Recording a file")
+                config.enable_record_to_file(record_bag)
+                
+            else:
+                print('No recording or reading of bag....')
 
             # Start streaming
             profile = self.pipeline.start(config)
@@ -106,7 +119,7 @@ class RealSense435i:
         self.gyroscope_x = None
         self.gyroscope_y = None
         self.gyroscope_z = None
-        ### Travel distance measurement related
+        # Travel distance measurement related
         # distance = 0.00
         self.norm_avg = 0
         self.norm_avgs = []
@@ -118,10 +131,10 @@ class RealSense435i:
         self.newX = 0
         self.newY = 0
         self.newZ = 0
-        
+
         self.delta_travel_distance = 0
         # end travel distance measurement
-            
+
         self.frame_count = 0
         self.start_time = time.time()
         self.frame_time = self.start_time
@@ -171,6 +184,7 @@ class RealSense435i:
                 self.depth_frame.get_data(), dtype=np.uint16) if self.enable_depth else None
             self.color_image = np.asanyarray(
                 color_frame.get_data(), dtype=np.uint8) if self.enable_rgb else None
+            
 
             # Calculate roi distance
             self.roi_distance = self.calculate_roi_distance()
@@ -207,7 +221,7 @@ class RealSense435i:
                 str((self.acceleration_x, self.acceleration_y, self.acceleration_z)),
                 str((self.gyroscope_x, self.gyroscope_y, self.gyroscope_z))))
             norm_accel = np.sqrt(np.power(
-                        acceleration.x, 2) + np.power(acceleration.y, 2)+np.power(acceleration.z, 2))  # || gives norm
+                acceleration.x, 2) + np.power(acceleration.y, 2)+np.power(acceleration.z, 2))  # || gives norm
             # norm_gyro = np.sqrt(
             #             np.power(gyroscope_x, 2) + np.power(gyroscope_y, 2)+np.power(gyroscope_z, 2))  # || gives norm
             if len(self.norm_avgs) <= 10000:
@@ -235,9 +249,9 @@ class RealSense435i:
                 if curr_accel >= 0.1:
                     # when changed to * 0.25 which is 250 fps / 1000 which is 0.25 frames per ms distance on X was relatively ok, when moving only on Z axis otherwise it gets noisy
                     # delta_t is the actual time frame difference
-                    self.delta_travel_distance = self.last_z + (self.z * delta_t * delta_t)/2
-                    
-            
+                    self.delta_travel_distance = self.last_z + \
+                        (self.z * delta_t * delta_t)/2
+
     def calculate_roi_distance(self):
         """Calcualtes the distance to the center point of the predefined ROI in order to pefrom obstacle detection, in case detector is not able to classify object.
         Returns:
@@ -271,12 +285,12 @@ class RealSense435i:
         :return: (rbg_image: nparray, depth_image: nparray, acceleration: (x:float, y:float, z:float), gyroscope: (x:float, y:float, z:float))
         """
         # original
-        #return self.color_image, self.depth_image, self.depth_frame, self.roi_distance, self.acceleration_x, self.acceleration_y, self.acceleration_z, self.gyroscope_x, self.gyroscope_y, self.gyroscope_z
+        # return self.color_image, self.depth_image, self.depth_frame, self.roi_distance, self.acceleration_x, self.acceleration_y, self.acceleration_z, self.gyroscope_x, self.gyroscope_y, self.gyroscope_z
         # shortened
         delta_distance_to_return = self.delta_travel_distance
-        # reseting delta travel distance 
+        # reseting delta travel distance
         self.delta_travel_distance = 0
-        
+
         return self.color_image, self.depth_frame, delta_distance_to_return, self.roi_distance
 
     def run(self):

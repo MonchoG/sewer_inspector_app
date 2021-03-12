@@ -2,6 +2,7 @@ import requests
 import json
 from requests.auth import HTTPDigestAuth
 import time
+import shutil
 # This is required if executing main
 
 
@@ -42,7 +43,7 @@ class RicohTheta:
         self.ricohState = RicohState(
             battery_level, self.captureStatus, storage_left, capture_mode, file_format, remaining_video_seconds)
         # last recorded vid
-        self.last_video = None
+        self.last_video = []
 
         # Flag
         self.last_command_id = None
@@ -106,9 +107,10 @@ class RicohTheta:
     # Calls the "/osc/commands/execute" endpoint of ricoh Api using post
     # Sets the device to video mode, the parameters can be modified according to the API and need
     # Sets to 4k Mp4
+    # sleepDelay, offdelay = 65535 or 0  to disable device from going to sleep mode or shutting down.
     def set_device_videoMode(self):
         body = json.dumps({"name": "camera.setOptions",	"parameters": {	"options": {
-            "captureMode": "video",	"sleepDelay": 1200, "offDelay": 600, "videoStitching": "ondevice",
+            "captureMode": "video",	"sleepDelay": 0, "offDelay": 0, "videoStitching": "ondevice",
             # "fileFormat": {"type": "mp4", "width": 3840, "height": 1920,  "_codec": "H.264/MPEG-4 AVC"},
             "_microphoneChannel": "1ch", "_gain": "mute",	"_shutterVolume": 100,
             "previewFormat": {"width": 3840, "height": 1920, "framerate": 30}}}})
@@ -121,7 +123,7 @@ class RicohTheta:
         body = json.dumps({"name": "camera.setOptions",
                            "parameters": {
                                "options": {
-                                   "captureMode": "image",	"sleepDelay": 1200, "offDelay": 600, "_imageStitching": "dynamicAuto",
+                                   "captureMode": "image",	"sleepDelay": 0, "offDelay": 0, "_imageStitching": "dynamicAuto",
                                    # "fileFormat": {"type": "jpeg", "width": 5376, "height": 2688},
                                    "_microphoneChannel": "1ch", "_gain": "mute",	"_shutterVolume": 100,
                                    "previewFormat": {"width": 3840, "height": 1920, "framerate": 30}}}})
@@ -131,6 +133,7 @@ class RicohTheta:
     # Calls the "/osc/commands/execute" endpoint of ricoh Api using post
     # Sets the device to video mode, the parameters can be modified according to the API and need
     def set_manual_camera_settings(self, iso=None, aperature=None, shutterSpeed=None):
+        # If camera setting value 0 it lets the deveice set the respective setting
         if not iso:
             iso = 0
         if not aperature:
@@ -144,7 +147,7 @@ class RicohTheta:
                                    "exposureProgram": 1,
                                    "iso": int(iso),
                                    "aperature": float(aperature),
-                                   "shutterSpeed":float(shutterSpeed)}}})
+                                   "shutterSpeed": float(shutterSpeed)}}})
         request = self.post_request("/osc/commands/execute", body)
         return request.json()
      # Calls the "/osc/commands/execute" endpoint of ricoh Api using post
@@ -174,10 +177,8 @@ class RicohTheta:
     # Starts continuous shooting.
     # The shooting method changes according to the shooting mode (captureMode) and _mode settings.
     def start_capture(self):
-        body = json.dumps({"name": "camera.startCapture"})
-        #
         self.last_command_id = "camera.startCapture"
-        #
+        body = json.dumps({"name": self.last_command_id})
         request = self.post_request("/osc/commands/execute", body)
         print(request.json())
         self.update_ricoh_state()
@@ -189,20 +190,28 @@ class RicohTheta:
     # set withDownload to True if want to save the videos immediatly after posting the request
     # returns the response from the stopCapture command.
     def stop_capture(self, withDownload=False):
-        body = json.dumps({"name": "camera.stopCapture"})
-        #
-        self.last_command_id = "camera.stopCapture"
-        #
-        request = self.post_request("/osc/commands/execute", body)
-        json_response = request.json()
-        
-        self.last_video = json_response["results"]["fileUrls"][0]
-        if withDownload:  
-            self.download_last()
+        try: 
+            self.last_command_id = "camera.stopCapture"
+            body = json.dumps({"name": self.last_command_id})
+            request = self.post_request("/osc/commands/execute", body)
+            json_response = request.json()
 
-        self.update_ricoh_state()
+            # does the result response from stopCapture contain file url ?
+            file_urls = json_response["results"]["fileUrls"]        
+            last_video_url = file_urls[0]
+            last_video_name = last_video_url[67:]
+            
+            self.last_video = [last_video_name, last_video_url]
+            
+            if withDownload:
+                self.download_last()
 
-        return json_response
+            self.update_ricoh_state()
+
+            return json_response
+        except Exception as e:
+            print("Ricoh threw exception in stop capture... {}".format(e))
+            return None
 
     # List files
     def list_files(self):
@@ -220,8 +229,8 @@ class RicohTheta:
         return media_files
 
     def download_last(self, withDelete=False):
-        #self.download_files(self.last_video,withDelete=withDelete)
-        response = requests.get(self.last_video, stream=True)
+        # self.download_files(self.last_video,withDelete=withDelete)
+        response = requests.get(self.last_video[1], stream=True)
         # reponse returns file path link, the name of the file starts from char 67
         file_name = self.last_video[67:]
         with open(file_name, 'wb') as f:
@@ -246,27 +255,29 @@ class RicohTheta:
                 # write the contents of the response (r.content)
                 # to a new file in binary mode.
                 f.write(response.content)
-            file_count += 1            
+            file_count += 1
         if withDelete:
             self.delete_file(files)
         print("[INFO] All files downloaded...")
 
     # Download single file
     def download_file(self, file):
+        
+        link = None
+        file_name = None
+        
         if isinstance(file, str):
             # if file is string ( file link, parse the link to get file name and extension)
             file_name = file[(file.rfind('/')+1):]
-            response = requests.get(file, stream=True)
+            link = file
         else:
             # else file is object of type mediaFile
             file_name = file.name
-            response = requests.get(file.fileUrl, stream=True)
+            link = file.Url
 
-        # reponse returns file path link, the name of the file starts from char 67
-        with open(file_name, 'wb') as f:
-            # write the contents of the response (r.content)
-            # to a new file in binary mode.
-            f.write(response.content)
+        with requests.get(link, stream=True) as r:
+            with open(file_name, 'wb') as f:
+                shutil.copyfileobj(r.raw, f)
         print("[INFO] Downloading file {}complete...".format(file_name))
 
     def delete_file(self, files):
